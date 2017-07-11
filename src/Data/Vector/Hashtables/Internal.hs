@@ -1,13 +1,16 @@
-{-# LANGUAGE RecordWildCards, BangPatterns #-}
+{-# LANGUAGE RecordWildCards, BangPatterns, TypeFamilies, FlexibleContexts #-}
 module Data.Vector.Hashtables.Internal where
 
 import Data.Bits
 import Data.Hashable
 import qualified Data.Vector.Generic.Mutable as V
+import qualified Data.Vector.Generic as VI
 import Data.Vector.Generic.Mutable (MVector)
 import qualified Data.Vector.Storable.Mutable as S
+import qualified Data.Vector.Storable as SI
 import qualified Data.Vector.Unboxed as UI
 import Data.Maybe
+import Control.Monad
 import Control.Monad.Primitive
 import Data.Primitive.MutVar
 
@@ -80,8 +83,8 @@ findEntry d key' = do
 
 insert :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k) 
        => Dictionary (PrimState m) ks k vs v -> k -> v -> m ()
-insert d key' value' = do
-    Dictionary{..} <- readMutVar . getDRef $ d
+insert DRef{..} key' value' = do
+    d@Dictionary{..} <- readMutVar getDRef
     let
         hashCode' = hash key' .&. 0x7FFFFFFFFFFFFFFF
         targetBucket = hashCode' `rem` V.length buckets
@@ -110,8 +113,9 @@ insert d key' value' = do
                     count <- refs ! getCount
                     refs <~ getCount $ count + 1
                     if count == V.length next
-                        then error "resize"
-                            -- return $ count & (hashCode' `rem` V.length buckets)
+                        then do 
+                            nd <- resize d count hashCode' key' value'
+                            writeMutVar getDRef nd
                         else add (fromIntegral count) (fromIntegral targetBucket)
 
         add !index !targetBucket = do
@@ -125,6 +129,55 @@ insert d key' value' = do
     go =<< buckets ! targetBucket
 
 {-# INLINE insert #-}
+
+resize Dictionary{..} index hashCode' key' value' = do
+    let newSize = getPrime (index*2)
+        delta = newSize - index
+
+    buckets <- V.replicate newSize (-1)
+
+    hashCode <- V.grow hashCode delta
+    next <- V.grow next delta
+    key <- V.grow key delta
+    value <- V.grow value delta
+
+    let go i | i < index = do
+                hc <- hashCode ! i
+                when (hc >= 0) $ do
+                    let bucket = hc `rem` newSize
+                    nx <- buckets ! bucket
+                    next <~ i $ nx
+                    buckets <~ bucket $ i
+                go (i + 1)
+             | otherwise = return () 
+    go 0
+
+    let targetBucket = hashCode' `rem` V.length buckets
+    hashCode <~ index $ hashCode'
+    b <- buckets ! targetBucket
+    next <~ index $ b
+    key <~ index $ key'
+    value <~ index $ value'
+    buckets <~ targetBucket $ index
+    return Dictionary{..}
+
+{-# INLINEABLE resize #-}
+    
+printTable :: Dictionary (PrimState IO) S.MVector Int S.MVector Int -> IO ()
+printTable DRef{..} = do
+    Dictionary{..} <- readMutVar getDRef
+    putStr "keys: "
+    print =<< SI.freeze key
+    putStr "vals: "
+    print =<< SI.freeze value
+    putStr "hash: "
+    print =<< SI.freeze hashCode
+    putStr "next: " 
+    print =<< SI.freeze next
+    putStr "bkts: " 
+    print =<< SI.freeze buckets
+    putStr "count, freeList, freeCount "
+    print =<< SI.freeze refs
 
 primes :: UI.Vector Int
 primes = UI.fromList [
