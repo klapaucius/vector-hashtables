@@ -53,7 +53,7 @@ initialize capacity = do
     return . DRef $ dr
 
 at :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k) 
-     => Dictionary (PrimState m) ks k vs v -> k -> m v
+   => Dictionary (PrimState m) ks k vs v -> k -> m v
 at d k = do
     i <- findEntry d k
     if i >= 0
@@ -162,7 +162,33 @@ resize Dictionary{..} index hashCode' key' value' = do
     return Dictionary{..}
 
 {-# INLINEABLE resize #-}
-    
+
+delete :: (Eq k, MVector ks k, Hashable k, PrimMonad m) 
+       => Dictionary (PrimState m) ks k vs v -> k -> m ()
+delete DRef{..} key' = do
+    Dictionary{..} <- readMutVar getDRef
+    let hashCode' = hash key' .&. 0x7FFFFFFFFFFFFFFF
+        bucket = hashCode' `rem` V.length buckets
+        go !last !i | i >= 0 = do
+            hc <- hashCode ! i
+            k  <- key ! i
+            if hc == hashCode' && k == key' then do
+                nxt <- next ! i
+                if last < 0 
+                    then buckets <~ bucket $ nxt
+                    else next <~ last $ nxt
+                hashCode <~ i $ -1
+                next <~ i =<< refs ! getFreeList 
+                -- TODO key <~ i $ null; value <~ i $ null  
+                refs <~ getFreeList $ i
+                fc <- refs ! getFreeCount
+                refs <~ getFreeCount $ fc + 1
+            else go i =<< next ! i
+            | otherwise = return ()
+    go (-1) =<< buckets ! bucket
+
+{-# INLINEABLE delete #-}
+
 printTable :: Dictionary (PrimState IO) S.MVector Int S.MVector Int -> IO ()
 printTable DRef{..} = do
     Dictionary{..} <- readMutVar getDRef

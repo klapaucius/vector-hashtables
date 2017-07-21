@@ -40,6 +40,24 @@ vht = do
               | otherwise = return ()
     go 0
 
+vhtd = do
+    ht <- VH.initialize n :: IO (VH.Dictionary (PrimState IO) VM.MVector Int VM.MVector Int)
+    let go !i | i <= n = VH.insert ht i i >> go (i + 1)
+              | otherwise = return ()
+    go 0
+    let go1 !i | i <= n = VH.delete ht i >> go1 (i + 1)
+               | otherwise = return ()
+    go1 0
+
+htbd = do
+    ht <- H.newSized n :: IO (H.BasicHashTable Int Int)
+    let go !i | i <= n = H.insert ht i i >> go (i + 1)
+              | otherwise = return ()
+    go 0
+    let go1 !i | i <= n = H.delete ht i >> go1 (i + 1)
+               | otherwise = return ()
+    go1 0
+
 vhtb = do
     ht <- VH.initialize n :: IO (VH.Dictionary (PrimState IO) BV.MVector Int BV.MVector Int)
     let go !i | i <= n = VH.insert ht i i >> go (i + 1)
@@ -103,10 +121,12 @@ main =  defaultMain
         -- , bench "insert hashtables cuckoo" $ nfIO htc
         [ bench "insert hashtables basic"  $ nfIO htb
         , bench "insert hashtables basic (resize)"  $ nfIO htbg
+        , bench "insert hashtables basic (delete)"  $ nfIO htbd
         -- , bench "insert hashtables linear" $ nfIO htl
         , bench "insert vector-hashtables boxed" $ nfIO vhtb
         , bench "insert vector-hashtables unboxed keys" $ nfIO vhtk
         , bench "insert vector-hashtables (resize)" $ nfIO vhtg
+        , bench "insert vector-hashtables (delete)" $ nfIO vhtd
         , bench "insert vector-hashtables" $ nfIO vht 
         , bench "insert mutable vector boxed" $ nfIO mvb
         , bench "insert mutable vector" $ nfIO mv ]
