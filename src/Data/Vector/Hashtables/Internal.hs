@@ -3,6 +3,8 @@ module Data.Vector.Hashtables.Internal where
 
 import Data.Bits
 import Data.Hashable
+import qualified Data.Vector.Mutable as B
+import qualified Data.Vector.Unboxed.Mutable as U
 import qualified Data.Vector.Generic.Mutable as V
 import qualified Data.Vector.Generic as VI
 import Data.Vector.Generic.Mutable (MVector)
@@ -163,7 +165,19 @@ resize Dictionary{..} index hashCode' key' value' = do
 
 {-# INLINEABLE resize #-}
 
-delete :: (Eq k, MVector ks k, Hashable k, PrimMonad m) 
+class DeleteEntry xs where 
+    deleteEntry :: (MVector xs x, PrimMonad m) => xs (PrimState m) x -> Int -> m ()
+
+instance DeleteEntry S.MVector where
+    deleteEntry _ _ = return ()
+
+instance DeleteEntry U.MVector where
+    deleteEntry _ _ = return ()
+
+instance DeleteEntry B.MVector where
+    deleteEntry v i = v <~ i $ undefined 
+
+delete :: (Eq k, MVector ks k, MVector vs v, Hashable k, PrimMonad m, DeleteEntry ks, DeleteEntry vs) 
        => Dictionary (PrimState m) ks k vs v -> k -> m ()
 delete DRef{..} key' = do
     Dictionary{..} <- readMutVar getDRef
@@ -179,7 +193,8 @@ delete DRef{..} key' = do
                     else next <~ last $ nxt
                 hashCode <~ i $ -1
                 next <~ i =<< refs ! getFreeList 
-                -- TODO key <~ i $ null; value <~ i $ null  
+                deleteEntry key i
+                deleteEntry value i  
                 refs <~ getFreeList $ i
                 fc <- refs ! getFreeCount
                 refs <~ getFreeCount $ fc + 1
