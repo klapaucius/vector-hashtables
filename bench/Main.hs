@@ -17,7 +17,7 @@ import Control.Monad
 import Control.Monad.Primitive
 import Data.IORef
 
-n = 10000000 :: Int
+n = 100000 :: Int
 
 htb = do
     ht <- H.newSized n :: IO (H.BasicHashTable Int Int)
@@ -31,8 +31,11 @@ htc = do
               | otherwise = return ()
     go 0
 
--- htl = do
---     ht <- H.newSized n :: IO (H.LinearHashTable Int Int)
+htl = do
+    ht <- H.newSized n :: IO (H.LinearHashTable Int Int)
+    let go !i | i <= n = H.insert ht i i >> go (i + 1)
+              | otherwise = return ()
+    go 0
 
 vht = do
     ht <- VH.initialize n :: IO (VH.Dictionary (PrimState IO) VM.MVector Int VM.MVector Int)
@@ -117,12 +120,13 @@ mv = do
 
 main :: IO ()
 main =  defaultMain
-        -- [ bench "insert hashtables cuckoo (resize)" $ nfIO htcg
-        -- , bench "insert hashtables cuckoo" $ nfIO htc
-        [ bench "insert hashtables basic"  $ nfIO htb
+        [ bench "insert hashmap" $ nfIO hm
+        , bench "insert hashtables cuckoo (resize)" $ nfIO htcg
+        , bench "insert hashtables cuckoo" $ nfIO htc
+        , bench "insert hashtables basic"  $ nfIO htb
         , bench "insert hashtables basic (resize)"  $ nfIO htbg
         , bench "insert hashtables basic (delete)"  $ nfIO htbd
-        -- , bench "insert hashtables linear" $ nfIO htl
+        , bench "insert hashtables linear" $ nfIO htl
         , bench "insert vector-hashtables boxed" $ nfIO vhtb
         , bench "insert vector-hashtables unboxed keys" $ nfIO vhtk
         , bench "insert vector-hashtables (resize)" $ nfIO vhtg

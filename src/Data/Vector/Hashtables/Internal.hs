@@ -20,6 +20,23 @@ type IntArray s = S.MVector s Int
 
 newtype Dictionary s ks k vs v = DRef { getDRef :: MutVar s (Dictionary_ s ks k vs v) }
 
+data FrozenDictionary ks k vs v = FrozenDictionary {
+    fhashCode, 
+    fnext, 
+    fbuckets :: SI.Vector Int,
+    count, freeList, freeCount :: Int,
+    fkey :: ks k,
+    fvalue :: vs v
+} deriving (Eq, Ord, Read, Show)
+
+findElem FrozenDictionary{..} key' = go $ fbuckets VI.! (hashCode' `rem` VI.length fbuckets) where
+    hashCode' = hash key' .&. 0x7FFFFFFFFFFFFFFF
+    go i | i >= 0 = 
+            if fhashCode VI.! i == hashCode' && fkey VI.! i == key' 
+                then i else go $ fnext VI.! i
+         | otherwise = -1
+{-# INLINE findElem #-}
+
 data Dictionary_ s ks k vs v = Dictionary {
     hashCode, 
     next, 
@@ -40,19 +57,87 @@ getFreeCount = 2
 (<~) :: (MVector v a, PrimMonad m) => v (PrimState m) a -> Int -> a -> m ()
 (<~) = V.unsafeWrite
 
-initialize :: (MVector ks k, MVector vs v, PrimMonad m) 
-           => Int -> m (Dictionary (PrimState m) ks k vs v)
+initialize
+    :: (MVector ks k, MVector vs v, PrimMonad m)
+    => Int
+    -> m (Dictionary (PrimState m) ks k vs v)
 initialize capacity = do
     let size = getPrime capacity
     hashCode <- V.replicate size 0
-    next <- V.replicate size 0
-    key <- V.new size
-    value <- V.new size
-    buckets <- V.replicate size (-1)
-    refs <- V.replicate 3 0
-    refs <~ 1 $ -1
-    dr <- newMutVar Dictionary {..}
+    next     <- V.replicate size 0
+    key      <- V.new size
+    value    <- V.new size
+    buckets  <- V.replicate size (-1)
+    refs     <- V.replicate 3 0
+    refs     <~ 1 $ -1
+    dr       <- newMutVar Dictionary {..}
     return . DRef $ dr
+
+clone
+    :: (MVector ks k, MVector vs v, PrimMonad m)
+    => Dictionary (PrimState m) ks k vs v
+    -> m (Dictionary (PrimState m) ks k vs v)
+clone DRef {..} = do
+    Dictionary {..} <- readMutVar getDRef
+    hashCode        <- V.clone hashCode
+    next            <- V.clone next
+    key             <- V.clone key
+    value           <- V.clone value
+    buckets         <- V.clone buckets
+    refs            <- V.clone refs
+    dr              <- newMutVar Dictionary {..}
+    return . DRef $ dr
+
+
+unsafeFreeze
+    :: (VI.Vector ks k, VI.Vector vs v, PrimMonad m)
+    => Dictionary (PrimState m) (VI.Mutable ks) k (VI.Mutable vs) v
+    -> m (FrozenDictionary ks k vs v)
+unsafeFreeze DRef {..} = do
+    Dictionary {..} <- readMutVar getDRef
+    fhashCode       <- VI.unsafeFreeze hashCode
+    fnext           <- VI.unsafeFreeze next
+    fbuckets        <- VI.unsafeFreeze buckets
+    count           <- refs ! getCount
+    freeList        <- refs ! getFreeList
+    freeCount       <- refs ! getFreeCount
+    fkey            <- VI.unsafeFreeze key
+    fvalue          <- VI.unsafeFreeze value
+    return FrozenDictionary {..}
+
+    
+unsafeThaw
+    :: (VI.Vector ks k, VI.Vector vs v, PrimMonad m)
+    => FrozenDictionary ks k vs v
+    -> m (Dictionary (PrimState m) (VI.Mutable ks) k (VI.Mutable vs) v)
+unsafeThaw FrozenDictionary {..} = do
+    hashCode <- VI.unsafeThaw fhashCode
+    next     <- VI.unsafeThaw fnext
+    buckets  <- VI.unsafeThaw fbuckets
+    refs     <- VI.unsafeThaw $ SI.fromListN 3 [count, freeList, freeCount]
+    key      <- VI.unsafeThaw fkey
+    value    <- VI.unsafeThaw fvalue
+    dr       <- newMutVar Dictionary {..}
+    return . DRef $ dr
+
+
+values :: (VI.Vector vs v, PrimMonad m) 
+       => Dictionary (PrimState m) ks k (VI.Mutable vs) v -> m (vs v)
+values DRef{..} = do
+    Dictionary{..} <- readMutVar getDRef
+    hcs <- SI.freeze hashCode
+    vs <- VI.freeze value
+    count <- refs ! getCount
+    return . VI.ifilter (\i _ -> hcs VI.! i >= 0) . VI.take count $ vs
+
+keys :: (VI.Vector ks k, PrimMonad m) 
+     => Dictionary (PrimState m) (VI.Mutable ks) k vs v -> m (ks k)
+keys DRef{..} = do
+    Dictionary{..} <- readMutVar getDRef
+    hcs <- SI.freeze hashCode
+    ks <- VI.freeze key
+    count <- refs ! getCount
+    return . VI.ifilter (\i _ -> hcs VI.! i >= 0) . VI.take count $ ks
 
 at :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k) 
    => Dictionary (PrimState m) ks k vs v -> k -> m v
@@ -203,22 +288,6 @@ delete DRef{..} key' = do
     go (-1) =<< buckets ! bucket
 
 {-# INLINEABLE delete #-}
-
-printTable :: Dictionary (PrimState IO) S.MVector Int S.MVector Int -> IO ()
-printTable DRef{..} = do
-    Dictionary{..} <- readMutVar getDRef
-    putStr "keys: "
-    print =<< SI.freeze key
-    putStr "vals: "
-    print =<< SI.freeze value
-    putStr "hash: "
-    print =<< SI.freeze hashCode
-    putStr "next: " 
-    print =<< SI.freeze next
-    putStr "bkts: " 
-    print =<< SI.freeze buckets
-    putStr "count, freeList, freeCount "
-    print =<< SI.freeze refs
 
 primes :: UI.Vector Int
 primes = UI.fromList [
