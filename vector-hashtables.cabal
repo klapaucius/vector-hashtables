@@ -23,6 +23,18 @@ library
                      , hashable
   default-language:    Haskell2010
 
+executable bench1
+  hs-source-dirs:      exe1
+  main-is:             Main.hs
+  ghc-options:         -O2 -rtsopts
+  build-depends:       base
+                     , vector-hashtables
+                     , vector
+                     , primitive
+                     , hashtables
+                     , unordered-containers
+  default-language:    Haskell2010
+
 benchmark vector-hashtables-bench
   type:                exitcode-stdio-1.0
   hs-source-dirs:      bench

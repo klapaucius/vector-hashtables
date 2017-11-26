@@ -8,6 +8,7 @@ import qualified Data.Vector.Unboxed.Mutable as U
 import qualified Data.Vector.Generic.Mutable as V
 import qualified Data.Vector.Generic as VI
 import Data.Vector.Generic.Mutable (MVector)
+import Data.Vector.Generic (Vector, Mutable)
 import qualified Data.Vector.Storable.Mutable as S
 import qualified Data.Vector.Storable as SI
 import qualified Data.Vector.Unboxed as UI
@@ -29,11 +30,13 @@ data FrozenDictionary ks k vs v = FrozenDictionary {
     fvalue :: vs v
 } deriving (Eq, Ord, Read, Show)
 
-findElem FrozenDictionary{..} key' = go $ fbuckets VI.! (hashCode' `rem` VI.length fbuckets) where
+findElem :: (Vector ks k, Vector vs v, Hashable k, Eq k) 
+         => FrozenDictionary ks k vs v -> k -> Int 
+findElem FrozenDictionary{..} key' = go $ fbuckets !. (hashCode' `rem` VI.length fbuckets) where
     hashCode' = hash key' .&. 0x7FFFFFFFFFFFFFFF
     go i | i >= 0 = 
-            if fhashCode VI.! i == hashCode' && fkey VI.! i == key' 
-                then i else go $ fnext VI.! i
+            if fhashCode !. i == hashCode' && fkey !. i == key' 
+                then i else go $ fnext !. i
          | otherwise = -1
 {-# INLINE findElem #-}
 
@@ -53,6 +56,9 @@ getFreeCount = 2
 
 (!) :: (MVector v a, PrimMonad m) => v (PrimState m) a -> Int -> m a
 (!) = V.unsafeRead
+
+(!.) :: (Vector v a) => v a -> Int -> a
+(!.) = VI.unsafeIndex
 
 (<~) :: (MVector v a, PrimMonad m) => v (PrimState m) a -> Int -> a -> m ()
 (<~) = V.unsafeWrite
@@ -91,7 +97,7 @@ clone DRef {..} = do
 
 unsafeFreeze
     :: (VI.Vector ks k, VI.Vector vs v, PrimMonad m)
-    => Dictionary (PrimState m) (VI.Mutable ks) k (VI.Mutable vs) v
+    => Dictionary (PrimState m) (Mutable ks) k (Mutable vs) v
     -> m (FrozenDictionary ks k vs v)
 unsafeFreeze DRef {..} = do
     Dictionary {..} <- readMutVar getDRef
@@ -107,9 +113,9 @@ unsafeFreeze DRef {..} = do
 
     
 unsafeThaw
-    :: (VI.Vector ks k, VI.Vector vs v, PrimMonad m)
+    :: (Vector ks k, Vector vs v, PrimMonad m)
     => FrozenDictionary ks k vs v
-    -> m (Dictionary (PrimState m) (VI.Mutable ks) k (VI.Mutable vs) v)
+    -> m (Dictionary (PrimState m) (Mutable ks) k (Mutable vs) v)
 unsafeThaw FrozenDictionary {..} = do
     hashCode <- VI.unsafeThaw fhashCode
     next     <- VI.unsafeThaw fnext
@@ -121,8 +127,8 @@ unsafeThaw FrozenDictionary {..} = do
     return . DRef $ dr
 
 
-values :: (VI.Vector vs v, PrimMonad m) 
-       => Dictionary (PrimState m) ks k (VI.Mutable vs) v -> m (vs v)
+values :: (Vector vs v, PrimMonad m) 
+       => Dictionary (PrimState m) ks k (Mutable vs) v -> m (vs v)
 values DRef{..} = do
     Dictionary{..} <- readMutVar getDRef
     hcs <- SI.freeze hashCode
@@ -130,8 +136,8 @@ values DRef{..} = do
     count <- refs ! getCount
     return . VI.ifilter (\i _ -> hcs VI.! i >= 0) . VI.take count $ vs
 
-keys :: (VI.Vector ks k, PrimMonad m) 
-     => Dictionary (PrimState m) (VI.Mutable ks) k vs v -> m (ks k)
+keys :: (Vector ks k, PrimMonad m) 
+     => Dictionary (PrimState m) (Mutable ks) k vs v -> m (ks k)
 keys DRef{..} = do
     Dictionary{..} <- readMutVar getDRef
     hcs <- SI.freeze hashCode
