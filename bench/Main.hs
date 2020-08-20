@@ -1,22 +1,23 @@
-{-# LANGUAGE BangPatterns, TypeFamilies #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Main where
 
-import Criterion.Main (bench, defaultMain, nfIO, nf)
+import           Criterion.Main                  (bench, defaultMain, nf, nfIO)
 
 import qualified Data.Vector.Hashtables.Internal as VH
-import qualified Data.Vector.Storable.Mutable as VM
-import qualified Data.Vector.Storable as V
+import qualified Data.Vector.Storable            as V
+import qualified Data.Vector.Storable.Mutable    as VM
 
-import qualified Data.Vector.Mutable as BV
+import qualified Data.Vector.Mutable             as BV
 
-import qualified Data.HashTable.IO as H
+import qualified Data.HashTable.IO               as H
 
 -- import qualified Data.HashMap.Strict as Map
 
-import Control.Monad
-import Control.Monad.Primitive
-import Data.IORef
+import           Control.Monad
+import           Control.Monad.Primitive
+import           Data.IORef
 
 n = 100000 :: Int
 
@@ -44,7 +45,7 @@ bh = do
 
 vhfind :: VH.Dictionary (PrimState IO) VM.MVector Int VM.MVector Int -> IO Int
 vhfind ht = do
-    let go !i !s | i <= n = do 
+    let go !i !s | i <= n = do
                                 x <- VH.findEntry ht i
                                 go (i + 1) (s + x)
                  | otherwise = return s
@@ -57,7 +58,7 @@ fvhfind ht = return $ go 0 0 where
 
 bhfind :: H.BasicHashTable Int Int -> IO Int
 bhfind ht = do
-    let go !i !s | i <= n = do 
+    let go !i !s | i <= n = do
                                 Just x <- H.lookup ht i
                                 go (i + 1) (s + x)
                  | otherwise = return s
@@ -163,24 +164,21 @@ mv = do
     go 0
 
 main :: IO ()
-main =  do 
+main =  do
     h <- vh
     h2 <- bh
     fh <- fvh
     defaultMain
-        [ bench "insert hashtables cuckoo (resize)" $ nfIO htcg
-        , bench "insert hashtables cuckoo" $ nfIO htc
-        , bench "insert hashtables basic"  $ nfIO htb
+        [ bench "insert hashtables basic"  $ nfIO htb
         , bench "insert hashtables basic (resize)"  $ nfIO htbg
         , bench "insert hashtables basic (delete)"  $ nfIO htbd
-        , bench "insert hashtables linear" $ nfIO htl
         , bench "insert vector-hashtables boxed" $ nfIO vhtb
         , bench "insert vector-hashtables unboxed keys" $ nfIO vhtk
         , bench "insert vector-hashtables (resize)" $ nfIO vhtg
         , bench "insert vector-hashtables (delete)" $ nfIO vhtd
-        , bench "insert vector-hashtables" $ nfIO vht 
+        , bench "insert vector-hashtables" $ nfIO vht
         , bench "insert mutable vector boxed" $ nfIO mvb
-        , bench "insert mutable vector" $ nfIO mv 
-        , bench "hashtables basic" $ nfIO (bhfind h2)
+        , bench "insert mutable vector" $ nfIO mv
+        , bench "find hashtables basic" $ nfIO (bhfind h2)
         , bench "find vector-hashtables" $ nfIO (vhfind h)
         , bench "find vector-hashtables (frozen)" $ nfIO (fvhfind fh) ]

@@ -1,48 +1,52 @@
-{-# LANGUAGE RecordWildCards, BangPatterns, TypeFamilies, FlexibleContexts #-}
+{-# LANGUAGE BangPatterns     #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE TypeFamilies     #-}
 module Data.Vector.Hashtables.Internal where
 
-import Data.Bits
-import Data.Hashable
-import qualified Data.Vector.Mutable as B
-import qualified Data.Vector.Unboxed.Mutable as U
-import qualified Data.Vector.Generic.Mutable as V
-import qualified Data.Vector.Generic as VI
-import Data.Vector.Generic.Mutable (MVector)
-import Data.Vector.Generic (Vector, Mutable)
+import           Control.Monad
+import           Control.Monad.Primitive
+import           Data.Bits
+import           Data.Hashable
+import           Data.Maybe
+import           Data.Primitive.MutVar
+import           Data.Vector.Generic          (Mutable, Vector)
+import qualified Data.Vector.Generic          as VI
+import           Data.Vector.Generic.Mutable  (MVector)
+import qualified Data.Vector.Generic.Mutable  as V
+import qualified Data.Vector.Mutable          as B
+import qualified Data.Vector.Storable         as SI
 import qualified Data.Vector.Storable.Mutable as S
-import qualified Data.Vector.Storable as SI
-import qualified Data.Vector.Unboxed as UI
-import Data.Maybe
-import Control.Monad
-import Control.Monad.Primitive
-import Data.Primitive.MutVar
+import qualified Data.Vector.Unboxed          as UI
+import qualified Data.Vector.Unboxed.Mutable  as U
+import qualified GHC.Exts                     as Exts
 
 type IntArray s = S.MVector s Int
 
 newtype Dictionary s ks k vs v = DRef { getDRef :: MutVar s (Dictionary_ s ks k vs v) }
 
 data FrozenDictionary ks k vs v = FrozenDictionary {
-    fhashCode, 
-    fnext, 
+    fhashCode,
+    fnext,
     fbuckets :: SI.Vector Int,
     count, freeList, freeCount :: Int,
     fkey :: ks k,
     fvalue :: vs v
 } deriving (Eq, Ord, Read, Show)
 
-findElem :: (Vector ks k, Vector vs v, Hashable k, Eq k) 
-         => FrozenDictionary ks k vs v -> k -> Int 
+findElem :: (Vector ks k, Vector vs v, Hashable k, Eq k)
+         => FrozenDictionary ks k vs v -> k -> Int
 findElem FrozenDictionary{..} key' = go $ fbuckets !. (hashCode' `rem` VI.length fbuckets) where
     hashCode' = hash key' .&. 0x7FFFFFFFFFFFFFFF
-    go i | i >= 0 = 
-            if fhashCode !. i == hashCode' && fkey !. i == key' 
+    go i | i >= 0 =
+            if fhashCode !. i == hashCode' && fkey !. i == key'
                 then i else go $ fnext !. i
          | otherwise = -1
 {-# INLINE findElem #-}
 
 data Dictionary_ s ks k vs v = Dictionary {
-    hashCode, 
-    next, 
+    hashCode,
+    next,
     buckets,
     refs :: IntArray s,
     key :: ks s k,
@@ -111,7 +115,7 @@ unsafeFreeze DRef {..} = do
     fvalue          <- VI.unsafeFreeze value
     return FrozenDictionary {..}
 
-    
+
 unsafeThaw
     :: (Vector ks k, Vector vs v, PrimMonad m)
     => FrozenDictionary ks k vs v
@@ -127,7 +131,7 @@ unsafeThaw FrozenDictionary {..} = do
     return . DRef $ dr
 
 
-values :: (Vector vs v, PrimMonad m) 
+values :: (Vector vs v, PrimMonad m)
        => Dictionary (PrimState m) ks k (Mutable vs) v -> m (vs v)
 values DRef{..} = do
     Dictionary{..} <- readMutVar getDRef
@@ -136,7 +140,7 @@ values DRef{..} = do
     count <- refs ! getCount
     return . VI.ifilter (\i _ -> hcs VI.! i >= 0) . VI.take count $ vs
 
-keys :: (Vector ks k, PrimMonad m) 
+keys :: (Vector ks k, PrimMonad m)
      => Dictionary (PrimState m) (Mutable ks) k vs v -> m (ks k)
 keys DRef{..} = do
     Dictionary{..} <- readMutVar getDRef
@@ -145,7 +149,7 @@ keys DRef{..} = do
     count <- refs ! getCount
     return . VI.ifilter (\i _ -> hcs VI.! i >= 0) . VI.take count $ ks
 
-at :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k) 
+at :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
    => Dictionary (PrimState m) ks k vs v -> k -> m v
 at d k = do
     i <- findEntry d k
@@ -156,7 +160,18 @@ at d k = do
         else error "KeyNotFoundException!"
 {-# INLINE at #-}
 
-findEntry :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k) 
+at' :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
+    => Dictionary (PrimState m) ks k vs v -> k -> m (Maybe v)
+at' d k = do
+  i <- findEntry d k
+  if i >= 0
+      then do
+          Dictionary{..} <- readMutVar . getDRef $ d
+          Just <$> value ! i
+      else pure Nothing
+{-# INLINE at' #-}
+
+findEntry :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
           => Dictionary (PrimState m) ks k vs v -> k -> m Int
 findEntry d key' = do
     Dictionary{..} <- readMutVar . getDRef $ d
@@ -174,7 +189,7 @@ findEntry d key' = do
     go =<< buckets ! (hashCode' `rem` V.length buckets)
 {-# INLINE findEntry #-}
 
-insert :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k) 
+insert :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
        => Dictionary (PrimState m) ks k vs v -> k -> v -> m ()
 insert DRef{..} key' value' = do
     d@Dictionary{..} <- readMutVar getDRef
@@ -206,7 +221,7 @@ insert DRef{..} key' value' = do
                     count <- refs ! getCount
                     refs <~ getCount $ count + 1
                     if count == V.length next
-                        then do 
+                        then do
                             nd <- resize d count hashCode' key' value'
                             writeMutVar getDRef nd
                         else add (fromIntegral count) (fromIntegral targetBucket)
@@ -242,7 +257,7 @@ resize Dictionary{..} index hashCode' key' value' = do
                     next <~ i $ nx
                     buckets <~ bucket $ i
                 go (i + 1)
-             | otherwise = return () 
+             | otherwise = return ()
     go 0
 
     let targetBucket = hashCode' `rem` V.length buckets
@@ -256,7 +271,7 @@ resize Dictionary{..} index hashCode' key' value' = do
 
 {-# INLINEABLE resize #-}
 
-class DeleteEntry xs where 
+class DeleteEntry xs where
     deleteEntry :: (MVector xs x, PrimMonad m) => xs (PrimState m) x -> Int -> m ()
 
 instance DeleteEntry S.MVector where
@@ -266,9 +281,9 @@ instance DeleteEntry U.MVector where
     deleteEntry _ _ = return ()
 
 instance DeleteEntry B.MVector where
-    deleteEntry v i = v <~ i $ undefined 
+    deleteEntry v i = v <~ i $ undefined
 
-delete :: (Eq k, MVector ks k, MVector vs v, Hashable k, PrimMonad m, DeleteEntry ks, DeleteEntry vs) 
+delete :: (Eq k, MVector ks k, MVector vs v, Hashable k, PrimMonad m, DeleteEntry ks, DeleteEntry vs)
        => Dictionary (PrimState m) ks k vs v -> k -> m ()
 delete DRef{..} key' = do
     Dictionary{..} <- readMutVar getDRef
@@ -279,13 +294,13 @@ delete DRef{..} key' = do
             k  <- key ! i
             if hc == hashCode' && k == key' then do
                 nxt <- next ! i
-                if last < 0 
+                if last < 0
                     then buckets <~ bucket $ nxt
                     else next <~ last $ nxt
                 hashCode <~ i $ -1
-                next <~ i =<< refs ! getFreeList 
+                next <~ i =<< refs ! getFreeList
                 deleteEntry key i
-                deleteEntry value i  
+                deleteEntry value i
                 refs <~ getFreeList $ i
                 fc <- refs ! getFreeCount
                 refs <~ getFreeCount $ fc + 1
@@ -294,6 +309,33 @@ delete DRef{..} key' = do
     go (-1) =<< buckets ! bucket
 
 {-# INLINEABLE delete #-}
+
+fromList
+  :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
+  => [(k, v)] -> m (Dictionary (PrimState m) ks k vs v)
+fromList kv = do
+  ht <- initialize 1
+  mapM_ (uncurry (insert ht)) kv
+  return ht
+
+toList
+  :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
+  => (Dictionary (PrimState m) ks k vs v) -> m [(k, v)]
+toList DRef {..} = do
+  Dictionary {..} <- readMutVar getDRef
+  count           <- refs ! getCount
+  forM [0 .. (count - 1)] $ \ix -> do
+    k <- key ! ix
+    v <- value ! ix
+    return (k, v)
+
+length
+  :: (MVector ks k, MVector ks k, PrimMonad m)
+  => Dictionary (PrimState m) ks k vs v -> m Int
+length DRef {..} = do
+  Dictionary {..} <- readMutVar getDRef
+  count           <- refs ! getCount
+  return count
 
 primes :: UI.Vector Int
 primes = UI.fromList [
