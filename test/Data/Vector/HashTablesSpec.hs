@@ -29,8 +29,9 @@ import           GHC.Generics                    (Generic)
 import           Test.Hspec.QuickCheck           (modifyMaxSuccess)
 import           Test.QuickCheck                 (Arbitrary (..), Gen,
                                                   NonNegative (..), Property,
-                                                  elements, forAll, generate,
-                                                  property, shuffle, vector)
+                                                  choose, elements, forAll,
+                                                  generate, property, shuffle,
+                                                  vector)
 
 import           Test.Hspec                      (Spec, describe, errorCall, it,
                                                   shouldBe, shouldThrow)
@@ -54,6 +55,13 @@ shuffledListN n = do
   testData <- listN n
   shuffledTestData <- shuffle testData
   return (testData, shuffledTestData)
+
+listsForRemoveN n = do
+  testData <- listN n
+  dropCount <- min (n - 1) <$> choose (1, n)
+  let deleteData = fst <$> take dropCount testData
+      insertData = drop dropCount testData
+  return (testData, deleteData)
 
 spec :: Spec
 spec = mutableSpec
@@ -100,88 +108,91 @@ mkSpec
 mkSpec ksp vsp = describe (specDescription ksp vsp) $
     modifyMaxSuccess (const 1000) $ do
       it "lookup for inserted value at specific index returns value" $
-        property prop_insertLookup'
+        property prop_insertLookup
 
       it "lookup for inserted value at specific index returns nothing" $
-        property prop_insertLookupNothing'
+        property prop_insertLookupNothing
 
       it "lookup for inserted value at specific index throws error" $
-        property prop_insertLookupError'
+        property prop_insertLookupError
 
       it "lookup for updated value at specific index returns updated value" $
-        property prop_insertUpdateLookup'
+        property prop_insertUpdateLookup
 
       it "lookup for deleted value at specific index returns nothing" $
-        property prop_insertDeleteLookupNothing'
+        property prop_insertDeleteLookupNothing
 
       it "lookup for deleted value at specific index throws error" $
-        property prop_insertDeleteLookupError'
+        property prop_insertDeleteLookupError
 
       it "table size increases when multiple elements added" $
-        property prop_insertMultipleElements'
+        property prop_insertMultipleElements
 
       it "lookup for inserted value with hash collision returns value" $
-        property prop_insertLookupHashCollisions'
+        property prop_insertLookupHashCollisions
 
-      it "fromList . toList === id" $ property prop_fromListToList'
+      it "fromList . toList === id" $ property prop_fromListToList
+
+      it "deleted entries are not present in key-value list after deleting from hashtable" $
+        property prop_insertDeleteKeysSize
 
   where
-    prop_insertLookup'
+    prop_insertLookup
       :: HashTableTest ks vs => (Int, Int) -> IO ()
-    prop_insertLookup' (x, y) = do
+    prop_insertLookup (x, y) = do
       ht <- testInit (Proxy @ks) (Proxy @vs) 10
       testInsert ht x y
       v <- testAt ht x
       v `shouldBe` y
 
-    prop_insertLookupNothing' :: HashTableTest ks vs => (Int, Int) -> IO ()
-    prop_insertLookupNothing' (x, y) = do
+    prop_insertLookupNothing :: HashTableTest ks vs => (Int, Int) -> IO ()
+    prop_insertLookupNothing (x, y) = do
       ht <- testInit (Proxy @ks) (Proxy @vs) 10
       testInsert ht (x + 1) y
       v <- testAt' ht x
       v `shouldBe` Nothing
 
-    prop_insertLookupError' :: HashTableTest ks vs => (Int, Int) -> IO ()
-    prop_insertLookupError' (x, y) = do
+    prop_insertLookupError :: HashTableTest ks vs => (Int, Int) -> IO ()
+    prop_insertLookupError (x, y) = do
       ht <- testInit (Proxy @ks) (Proxy @vs) 10
       testInsert ht (x + 1) y
       testAt ht x `shouldThrow` errorCall "KeyNotFoundException!"
 
-    prop_insertUpdateLookup' :: HashTableTest ks vs => (Int, Int) -> IO ()
-    prop_insertUpdateLookup' (x, y) = do
+    prop_insertUpdateLookup :: HashTableTest ks vs => (Int, Int) -> IO ()
+    prop_insertUpdateLookup (x, y) = do
       ht <- testInit (Proxy @ks) (Proxy @vs) 10
       testInsert ht x y
       testInsert ht x (y + 1)
       v <- testAt ht x
       v `shouldBe` (y + 1)
 
-    prop_insertDeleteLookupNothing' :: HashTableTest ks vs => (Int, Int) -> IO ()
-    prop_insertDeleteLookupNothing' (x, y) = do
+    prop_insertDeleteLookupNothing :: HashTableTest ks vs => (Int, Int) -> IO ()
+    prop_insertDeleteLookupNothing (x, y) = do
       ht <- testInit (Proxy @ks) (Proxy @vs) 10
       testInsert ht x y
       testDelete ht x
       v <- testAt' ht x
       v `shouldBe` Nothing
 
-    prop_insertDeleteLookupError' :: HashTableTest ks vs => (Int, Int) -> IO ()
-    prop_insertDeleteLookupError' (x, y) = do
+    prop_insertDeleteLookupError :: HashTableTest ks vs => (Int, Int) -> IO ()
+    prop_insertDeleteLookupError (x, y) = do
       ht <- testInit (Proxy @ks) (Proxy @vs) 10
       testInsert ht 0 1
       testDelete ht 0
       testAt ht 0 `shouldThrow` errorCall "KeyNotFoundException!"
 
-    prop_insertMultipleElements'
+    prop_insertMultipleElements
       :: HashTableTest ks vs
       => (NonNegative Int) -> Property
-    prop_insertMultipleElements' (NonNegative n) = forAll (listN n) $ \xs -> do
+    prop_insertMultipleElements (NonNegative n) = forAll (listN n) $ \xs -> do
       ht <- testInit (Proxy @ks) (Proxy @vs) 2
       mapM_ (uncurry (testInsert ht)) xs
       htl <- testLength ht
       htl `shouldBe` (length . Set.toList . Set.fromList) (fst <$> xs)
 
-    prop_insertLookupHashCollisions'
+    prop_insertLookupHashCollisions
       :: HashTableTest ks vs => (AlwaysCollide, Int) -> (AlwaysCollide, Int) -> IO ()
-    prop_insertLookupHashCollisions' (x1, y1) (x2, y2) = do
+    prop_insertLookupHashCollisions (x1, y1) (x2, y2) = do
       ht <- testInitCollide (Proxy @ks) (Proxy @vs) 10
       let x2' = if x1 /= x2 then x2 else x2 + 1
       testInsertCollide ht x1 y1
@@ -189,10 +200,19 @@ mkSpec ksp vsp = describe (specDescription ksp vsp) $
       v <- testAtCollide ht x1
       v `shouldBe` y1
 
-    prop_fromListToList' (NonNegative n) = forAll (shuffledListN n) $ \(xs, ys) -> do
+    prop_fromListToList (NonNegative n) = forAll (shuffledListN n) $ \(xs, ys) -> do
       ht <- testFromList (Proxy @ks) (Proxy @vs) xs
       xs' <- testToList ht
       L.sort xs' `shouldBe` L.sort ys
+
+    prop_insertDeleteKeysSize (NonNegative n) = forAll (listsForRemoveN n) go
+      where
+        go (insertData, deleteData) = do
+          ht <- testInit (Proxy @ks) (Proxy @vs) 2
+          mapM_ (uncurry (testInsert ht)) insertData
+          mapM_ (testDelete ht) deleteData
+          kvs <- testToList ht
+          L.length insertData - L.length deleteData `shouldBe` L.length kvs
 
 
 instance HashTableTest M.MVector M.MVector where

@@ -314,28 +314,34 @@ fromList
   :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
   => [(k, v)] -> m (Dictionary (PrimState m) ks k vs v)
 fromList kv = do
-  ht <- initialize 1
-  mapM_ (uncurry (insert ht)) kv
-  return ht
+    ht <- initialize 1
+    mapM_ (uncurry (insert ht)) kv
+    return ht
 
 toList
   :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
   => (Dictionary (PrimState m) ks k vs v) -> m [(k, v)]
 toList DRef {..} = do
-  Dictionary {..} <- readMutVar getDRef
-  count           <- refs ! getCount
-  forM [0 .. (count - 1)] $ \ix -> do
-    k <- key ! ix
-    v <- value ! ix
-    return (k, v)
+    Dictionary {..} <- readMutVar getDRef
+    hcs <- SI.freeze hashCode
+    count <- refs ! getCount
+    let indeces = catMaybes . zipWith collect [0..] . VI.toList . VI.take count $ hcs
+        collect i _ | hcs VI.! i >= 0 = Just i
+                    | otherwise       = Nothing
+        go i = do
+          k <- key ! i
+          v <- value ! i
+          return (k, v)
+    mapM go indeces
 
 length
   :: (MVector ks k, MVector ks k, PrimMonad m)
   => Dictionary (PrimState m) ks k vs v -> m Int
 length DRef {..} = do
-  Dictionary {..} <- readMutVar getDRef
-  count           <- refs ! getCount
-  return count
+    Dictionary {..} <- readMutVar getDRef
+    count           <- refs ! getCount
+    freeCount       <- refs ! getFreeCount
+    return (count - freeCount)
 
 primes :: UI.Vector Int
 primes = UI.fromList [
