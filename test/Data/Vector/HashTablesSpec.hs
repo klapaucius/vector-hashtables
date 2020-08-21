@@ -60,7 +60,6 @@ listsForRemoveN n = do
   testData <- listN n
   dropCount <- min (n - 1) <$> choose (1, n)
   let deleteData = fst <$> take dropCount testData
-      insertData = drop dropCount testData
   return (testData, deleteData)
 
 spec :: Spec
