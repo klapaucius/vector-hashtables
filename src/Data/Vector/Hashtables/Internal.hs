@@ -20,6 +20,7 @@ import qualified Data.Vector.Storable.Mutable as S
 import qualified Data.Vector.Unboxed          as UI
 import qualified Data.Vector.Unboxed.Mutable  as U
 import qualified GHC.Exts                     as Exts
+import           Prelude                      hiding (length, lookup)
 
 type IntArray s = S.MVector s Int
 
@@ -310,6 +311,237 @@ delete DRef{..} key' = do
 
 {-# INLINEABLE delete #-}
 
+lookup :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
+   => Dictionary (PrimState m) ks k vs v -> k -> m (Maybe v)
+lookup = at'
+{-# INLINE lookup #-}
+
+lookup' :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
+   => Dictionary (PrimState m) ks k vs v -> k -> m v
+lookup' = at
+{-# INLINE lookup' #-}
+
+lookupIndex :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
+   => Dictionary (PrimState m) ks k vs v -> k -> m (Maybe Int)
+lookupIndex ht k = do
+    let safeIndex i | i < 0 = Nothing
+                    | otherwise = Just i
+    return . safeIndex =<< findEntry ht k
+{-# INLINE lookupIndex #-}
+
+null
+  :: (MVector ks k, PrimMonad m)
+  => Dictionary (PrimState m) ks k vs v -> m Bool
+null ht = return . (== 0) =<< length ht
+{-# INLINE null #-}
+
+length
+  :: (MVector ks k, PrimMonad m)
+  => Dictionary (PrimState m) ks k vs v -> m Int
+length DRef {..} = do
+    Dictionary {..} <- readMutVar getDRef
+    count           <- refs ! getCount
+    freeCount       <- refs ! getFreeCount
+    return (count - freeCount)
+{-# INLINE length #-}
+
+size
+  :: (MVector ks k, PrimMonad m)
+  => Dictionary (PrimState m) ks k vs v -> m Int
+size = length
+{-# INLINE size #-}
+
+member
+  :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
+  => Dictionary (PrimState m) ks k vs v -> k -> m Bool
+member ht k = return . (>= 0) =<< findEntry ht k
+{-# INLINE member #-}
+
+findWithDefault
+  :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
+  => Dictionary (PrimState m) ks k vs v -> v -> k -> m v
+findWithDefault ht v k = return . fromMaybe v =<< at' ht k
+{-# INLINE findWithDefault #-}
+
+alter
+  :: ( MVector ks k, MVector vs v, DeleteEntry ks, DeleteEntry vs
+     , PrimMonad m, Hashable k, Eq k
+     )
+  => Dictionary (PrimState m) ks k vs v -> (Maybe v -> Maybe v) -> k -> m ()
+alter ht f k = do
+  mv <- at' ht k
+  case f mv of
+    Nothing -> delete ht k
+    Just v  -> insert ht k v
+{-# INLINABLE alter #-}
+
+-- * Combine
+
+-- | The union of two maps.
+-- If a key occurs in both maps,
+-- the mapping from the first will be the mapping in the result.
+union
+  :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
+  => Dictionary (PrimState m) ks k vs v
+  -> Dictionary (PrimState m) ks k vs v
+  -> m (Dictionary (PrimState m) ks k vs v)
+union = unionWith const
+
+-- | The union of two maps.
+-- If a key occurs in both maps,
+-- the provided function (first argument) will be used to compute the result.
+unionWith
+  :: (MVector ks k, MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
+  => (v -> v -> v)
+  -> Dictionary (PrimState m) ks k vs v
+  -> Dictionary (PrimState m) ks k vs v
+  -> m (Dictionary (PrimState m) ks k vs v)
+unionWith f = unionWithKey (const f)
+
+-- | The union of two maps.
+-- If a key occurs in both maps,
+-- the provided function (first argument) will be used to compute the result.
+unionWithKey
+  :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
+  => (k -> v -> v -> v)
+  -> Dictionary (PrimState m) ks k vs v
+  -> Dictionary (PrimState m) ks k vs v
+  -> m (Dictionary (PrimState m) ks k vs v)
+unionWithKey f t1 t2 = do
+  l1 <- length t1
+  l2 <- length t2
+  let smallest = min l1 l2
+      greatest = max l1 l2
+      g k v1 v2 = if smallest == l1 then f k v1 v2 else f k v2 v1
+      (tS, tG) = if smallest == l1 then (t1, t2) else (t2, t1)
+  ht <- clone tG
+  dictG <- readMutVar . getDRef $ tG
+  dictS <- readMutVar . getDRef $ tS
+  hcsS <- SI.freeze . hashCode $ dictS
+  let indices = catMaybes . zipWith collect [0 ..] . VI.toList . VI.take smallest $ hcsS
+      collect i _ | hcsS VI.! i >= 0 = Just i
+                  | otherwise       = Nothing
+      go i = do
+        k <- key dictS ! i
+        v <- value dictS ! i
+        iS <- at' tG k -- FIXME: too many reads
+        case iS of
+          Nothing -> insert ht k v
+          Just vG -> insert ht k (g k v vG)
+  mapM_ go indices
+  return ht
+
+-- * Difference and intersection
+
+-- | Difference of two maps. Return elements of the first map
+-- not existing in the second.
+difference
+  :: (MVector ks k, MVector vs v, MVector vs w, PrimMonad m, Hashable k, Eq k)
+  => Dictionary (PrimState m) ks k vs v
+  -> Dictionary (PrimState m) ks k vs w
+  -> m (Dictionary (PrimState m) ks k vs v)
+difference a b = do
+  kvs <- toList a
+  ht <- initialize 10
+  mapM_ (go ht) kvs
+  return ht
+  where
+    go ht (k, v) = do
+      mv <- lookup b k
+      case mv of
+        Nothing -> insert ht k v
+        _       -> return ()
+{-# INLINABLE difference #-}
+
+-- | Difference with a combining function. When two equal keys are
+-- encountered, the combining function is applied to the values of these keys.
+-- If it returns 'Nothing', the element is discarded (proper set difference). If
+-- it returns (@'Just' y@), the element is updated with a new value @y@.
+differenceWith
+  :: (MVector ks k, MVector vs v, MVector vs w, PrimMonad m, Hashable k, Eq k)
+  => (v -> w -> Maybe v)
+  -> Dictionary (PrimState m) ks k vs v
+  -> Dictionary (PrimState m) ks k vs w
+  -> m (Dictionary (PrimState m) ks k vs v)
+differenceWith f a b = do
+  kvs <- toList a
+  ht <- initialize 10
+  mapM_ (go ht) kvs
+  return ht
+  where
+    go ht (k, v) = do
+      mv <- lookup b k
+      case mv of
+        Nothing -> insert ht k v
+        Just w  -> maybe (return ()) (insert ht k) (f v w)
+{-# INLINABLE differenceWith #-}
+
+-- | Intersection of two maps. Return elements of the first
+-- map for keys existing in the second.
+intersection
+  :: (MVector ks k, MVector vs v, MVector vs w, PrimMonad m, Hashable k, Eq k)
+  => Dictionary (PrimState m) ks k vs v
+  -> Dictionary (PrimState m) ks k vs w
+  -> m (Dictionary (PrimState m) ks k vs v)
+intersection a b = do
+  kvs <- toList a
+  ht <- initialize 10
+  mapM_ (go ht) kvs
+  return ht
+  where
+    go ht (k, v) = do
+      mv <- lookup b k
+      case mv of
+        Nothing -> return ()
+        Just _  -> insert ht k v
+{-# INLINABLE intersection #-}
+
+-- | Intersection of two maps. If a key occurs in both maps
+-- the provided function is used to combine the values from the two
+-- maps.
+intersectionWith
+  :: (MVector ks k, MVector vs v1, MVector vs v2, MVector vs v3, PrimMonad m, Hashable k, Eq k)
+  => (v1 -> v2 -> v3)
+  -> Dictionary (PrimState m) ks k vs v1
+  -> Dictionary (PrimState m) ks k vs v2
+  -> m (Dictionary (PrimState m) ks k vs v3)
+intersectionWith f a b = do
+  kvs <- toList a
+  ht <- initialize 10
+  mapM_ (go ht) kvs
+  return ht
+  where
+    go ht (k, v) = do
+      mv <- lookup b k
+      case mv of
+        Nothing -> return ()
+        Just w  -> insert ht k (f v w)
+{-# INLINABLE intersectionWith #-}
+
+-- | Intersection of two maps. If a key occurs in both maps
+-- the provided function is used to combine the values from the two
+-- maps.
+intersectionWithKey
+  :: (MVector ks k, MVector vs v1, MVector vs v2, MVector vs v3, PrimMonad m, Hashable k, Eq k)
+  => (k -> v1 -> v2 -> v3)
+  -> Dictionary (PrimState m) ks k vs v1
+  -> Dictionary (PrimState m) ks k vs v2
+  -> m (Dictionary (PrimState m) ks k vs v3)
+intersectionWithKey f a b = do
+  kvs <- toList a
+  ht <- initialize 10
+  mapM_ (go ht) kvs
+  return ht
+  where
+    go ht (k, v) = do
+      mv <- lookup b k
+      case mv of
+        Nothing -> return ()
+        Just w  -> insert ht k (f k v w)
+{-# INLINABLE intersectionWithKey #-}
+
+-- * List conversions
+
 fromList
   :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
   => [(k, v)] -> m (Dictionary (PrimState m) ks k vs v)
@@ -334,14 +566,7 @@ toList DRef {..} = do
           return (k, v)
     mapM go indeces
 
-length
-  :: (MVector ks k, MVector ks k, PrimMonad m)
-  => Dictionary (PrimState m) ks k vs v -> m Int
-length DRef {..} = do
-    Dictionary {..} <- readMutVar getDRef
-    count           <- refs ! getCount
-    freeCount       <- refs ! getFreeCount
-    return (count - freeCount)
+-- * Extras
 
 primes :: UI.Vector Int
 primes = UI.fromList [
