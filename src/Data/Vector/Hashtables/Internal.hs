@@ -172,6 +172,19 @@ at' d k = do
       else pure Nothing
 {-# INLINE at' #-}
 
+atWithOrElse :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
+     => Dictionary (PrimState m) ks k vs v
+     -> k
+     -> (Dictionary (PrimState m) ks k vs v -> Int -> m a)
+     -> (Dictionary (PrimState m) ks k vs v -> m a)
+     -> m a
+atWithOrElse d k onFound onNothing = do
+  i <- findEntry d k
+  if i >= 0
+      then onFound d i
+      else onNothing d
+{-# INLINE atWithOrElse #-}
+
 findEntry :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
           => Dictionary (PrimState m) ks k vs v -> k -> m Int
 findEntry d key' = do
@@ -198,46 +211,58 @@ insert DRef{..} key' value' = do
         hashCode' = hash key' .&. 0x7FFFFFFFFFFFFFFF
         targetBucket = hashCode' `rem` V.length buckets
 
-        go i    | i >= 0 = do
-                    hc <- hashCode ! i
-                    if hc == hashCode'
-                        then do
-                            k  <- key ! i
-                            if k == key'
-                                then value <~ i $ value'
-                                else go =<< next ! i
-                        else go =<< next ! i
-                | otherwise = addOrResize
-
-        addOrResize = do
-            freeCount <- refs ! getFreeCount
-            if freeCount > 0
-                then do
-                    index <- refs ! getFreeList
-                    nxt <- next ! index
-                    refs <~ getFreeList $ nxt
-                    refs <~ getFreeCount $ freeCount - 1
-                    add index targetBucket
-                else do
-                    count <- refs ! getCount
-                    refs <~ getCount $ count + 1
-                    if count == V.length next
-                        then do
-                            nd <- resize d count hashCode' key' value'
-                            writeMutVar getDRef nd
-                        else add (fromIntegral count) (fromIntegral targetBucket)
-
-        add !index !targetBucket = do
-            hashCode <~ index $ hashCode'
-            b <- buckets ! targetBucket
-            next <~ index $ b
-            key <~ index $ key'
-            value <~ index $ value'
-            buckets <~ targetBucket $ index
-
-    go =<< buckets ! targetBucket
-
+    insertWithIndex targetBucket hashCode' key' value' getDRef d =<< buckets ! targetBucket
 {-# INLINE insert #-}
+
+insertWithIndex
+  :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
+  => Int -> Int -> k -> v -> MutVar (PrimState m) (Dictionary_ (PrimState m) ks k vs v) -> Dictionary_ (PrimState m) ks k vs v -> Int -> m ()
+insertWithIndex !targetBucket !hashCode' key' value' getDRef d@Dictionary{..} i
+      | i >= 0 = do
+           hc <- hashCode ! i
+           if hc == hashCode'
+               then do
+                   k  <- key ! i
+                   if k == key'
+                       then value <~ i $ value'
+                       else insertWithIndex targetBucket hashCode' key' value' getDRef d =<< next ! i
+               else insertWithIndex targetBucket hashCode' key' value' getDRef d =<< next ! i
+      | otherwise = addOrResize targetBucket hashCode' key' value' getDRef d
+{-# INLINE insertWithIndex #-}
+
+addOrResize
+  :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
+  => Int -> Int -> k -> v -> MutVar (PrimState m) (Dictionary_ (PrimState m) ks k vs v) -> Dictionary_ (PrimState m) ks k vs v -> m ()
+addOrResize !targetBucket !hashCode' !key' !value' dref d@Dictionary{..}  = do
+    freeCount <- refs ! getFreeCount
+    if freeCount > 0
+        then do
+            index <- refs ! getFreeList
+            nxt <- next ! index
+            refs <~ getFreeList $ nxt
+            refs <~ getFreeCount $ freeCount - 1
+            add index targetBucket hashCode' key' value' d
+        else do
+            count <- refs ! getCount
+            refs <~ getCount $ count + 1
+            if count == V.length next
+                then do
+                    nd <- resize d count hashCode' key' value'
+                    writeMutVar dref nd
+                else add (fromIntegral count) (fromIntegral targetBucket) hashCode' key' value' d
+{-# INLINE addOrResize #-}
+
+add :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
+    => Int -> Int -> Int -> k -> v -> Dictionary_ (PrimState m) ks k vs v -> m ()
+add !index !targetBucket !hashCode' !key' !value' Dictionary{..} = do
+    hashCode <~ index $ hashCode'
+    b <- buckets ! targetBucket
+    next <~ index $ b
+    key <~ index $ key'
+    value <~ index $ value'
+    buckets <~ targetBucket $ index
+{-# INLINE add #-}
+
 
 resize Dictionary{..} index hashCode' key' value' = do
     let newSize = getPrime (index*2)
@@ -270,7 +295,7 @@ resize Dictionary{..} index hashCode' key' value' = do
     buckets <~ targetBucket $ index
     return Dictionary{..}
 
-{-# INLINEABLE resize #-}
+{-# INLINE resize #-}
 
 class DeleteEntry xs where
     deleteEntry :: (MVector xs x, PrimMonad m) => xs (PrimState m) x -> Int -> m ()
@@ -287,29 +312,35 @@ instance DeleteEntry B.MVector where
 delete :: (Eq k, MVector ks k, MVector vs v, Hashable k, PrimMonad m, DeleteEntry ks, DeleteEntry vs)
        => Dictionary (PrimState m) ks k vs v -> k -> m ()
 delete DRef{..} key' = do
-    Dictionary{..} <- readMutVar getDRef
+    d@Dictionary{..} <- readMutVar getDRef
     let hashCode' = hash key' .&. 0x7FFFFFFFFFFFFFFF
         bucket = hashCode' `rem` V.length buckets
-        go !last !i | i >= 0 = do
-            hc <- hashCode ! i
-            k  <- key ! i
-            if hc == hashCode' && k == key' then do
-                nxt <- next ! i
-                if last < 0
-                    then buckets <~ bucket $ nxt
-                    else next <~ last $ nxt
-                hashCode <~ i $ -1
-                next <~ i =<< refs ! getFreeList
-                deleteEntry key i
-                deleteEntry value i
-                refs <~ getFreeList $ i
-                fc <- refs ! getFreeCount
-                refs <~ getFreeCount $ fc + 1
-            else go i =<< next ! i
-            | otherwise = return ()
-    go (-1) =<< buckets ! bucket
+    deleteWithIndex bucket hashCode' d key' (-1) =<< buckets ! bucket
 
-{-# INLINEABLE delete #-}
+{-# INLINE delete #-}
+
+deleteWithIndex
+  :: (Eq k, MVector ks k, MVector vs v, Hashable k, PrimMonad m, DeleteEntry ks, DeleteEntry vs)
+  => Int -> Int -> Dictionary_ (PrimState m) ks k vs v -> k -> Int -> Int -> m ()
+deleteWithIndex !bucket !hashCode' d@Dictionary{..} key' !last !i
+  | i >= 0 = do
+      hc <- hashCode ! i
+      k <- key ! i
+      if hc == hashCode' && k == key' then do
+          nxt <- next ! i
+          if last < 0
+              then buckets <~ bucket $ nxt
+              else next <~ last $ nxt
+          hashCode <~ i $ -1
+          next <~ i =<< refs ! getFreeList
+          deleteEntry key i
+          deleteEntry value i
+          refs <~ getFreeList $ i
+          fc <- refs ! getFreeCount
+          refs <~ getFreeCount $ fc + 1
+        else deleteWithIndex bucket hashCode' d key' i =<< next ! i
+  | otherwise = return ()
+{-# INLINE deleteWithIndex #-}
 
 lookup :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
    => Dictionary (PrimState m) ks k vs v -> k -> m (Maybe v)
@@ -369,10 +400,29 @@ alter
      )
   => Dictionary (PrimState m) ks k vs v -> (Maybe v -> Maybe v) -> k -> m ()
 alter ht f k = do
-  mv <- at' ht k
-  case f mv of
-    Nothing -> delete ht k
-    Just v  -> insert ht k v
+  d@Dictionary{..} <- readMutVar . getDRef $ ht
+  let
+      hashCode' = hash k .&. 0x7FFFFFFFFFFFFFFF
+      targetBucket = hashCode' `rem` V.length buckets
+
+      onFound' value' dict i = insertWithIndex targetBucket hashCode' k value' (getDRef ht) dict i
+      onNothing' dict i = deleteWithIndex targetBucket hashCode' d k (-1) i
+
+      onFound dict i = do
+        d'@Dictionary{..} <- readMutVar . getDRef $ dict
+        v <- value ! i
+        case f (Just v) of
+          Nothing -> onNothing' d' i
+          Just v' ->  onFound' v' d' i
+
+      onNothing dict = do
+        d' <- readMutVar . getDRef $ dict
+        case f Nothing of
+          Nothing -> return ()
+          Just v' -> onFound' v' d' (-1)
+
+  void $ atWithOrElse ht k onFound onNothing
+
 {-# INLINABLE alter #-}
 
 -- * Combine
@@ -421,19 +471,31 @@ unionWithKey f t1 t2 = do
   let indices = catMaybes . zipWith collect [0 ..] . VI.toList . VI.take smallest $ hcsS
       collect i _ | hcsS VI.! i >= 0 = Just i
                   | otherwise       = Nothing
+
       go i = do
         k <- key dictS ! i
         v <- value dictS ! i
-        iS <- at' tG k -- FIXME: too many reads
-        case iS of
-          Nothing -> insert ht k v
-          Just vG -> insert ht k (g k v vG)
+        let
+           hashCode' = hash k .&. 0x7FFFFFFFFFFFFFFF
+           targetBucket = hashCode' `rem` V.length (buckets dictG)
+
+           onFound dict i = do
+             d@Dictionary{..} <- readMutVar . getDRef $ dict
+             vG <- value ! i
+             insertWithIndex targetBucket hashCode' k (g k v vG) (getDRef dict) d i
+
+           onNothing dict = do
+             d@Dictionary{..} <- readMutVar . getDRef $ dict
+             insertWithIndex targetBucket hashCode' k v (getDRef dict) d
+               =<< buckets ! targetBucket
+
+        void $ atWithOrElse ht k onFound onNothing
   mapM_ go indices
   return ht
 
 -- * Difference and intersection
 
--- | Difference of two maps. Return elements of the first map
+-- | Difference of two tables. Return elements of the first table
 -- not existing in the second.
 difference
   :: (MVector ks k, MVector vs v, MVector vs w, PrimMonad m, Hashable k, Eq k)

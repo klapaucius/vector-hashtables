@@ -46,23 +46,27 @@ newtype AlwaysCollide = AC Int
 instance Hashable AlwaysCollide where
     hashWithSalt _ _ = 1
 
+listN :: Int -> Gen [(Int, Int)]
 listN n = do
   keys <- vector n
   vals <- vector n
   let keys' = Set.toList (Set.fromList keys)
   return (zip keys' vals)
 
+shuffledListN :: Int -> Gen ([(Int, Int)], [(Int, Int)])
 shuffledListN n = do
   testData <- listN n
   shuffledTestData <- shuffle testData
   return (testData, shuffledTestData)
 
+listsForRemoveN :: Int -> Gen ([(Int, Int)], [Int])
 listsForRemoveN n = do
   testData <- listN n
   dropCount <- min (n - 1) <$> choose (1, n)
   let deleteData = fst <$> take dropCount testData
   return (testData, deleteData)
 
+twoListsN :: Int -> Gen ([(Int, Int)], [(Int, Int)])
 twoListsN n = do
   list1 <- listN n
   list2 <- listN n
@@ -239,11 +243,13 @@ mkSpec ksp vsp = describe (specDescription ksp vsp) $
       v <- testAtCollide ht x1
       v `shouldBe` y1
 
+    prop_fromListToList :: NonNegative Int -> Property
     prop_fromListToList (NonNegative n) = forAll (shuffledListN n) $ \(xs, ys) -> do
       ht <- testFromList (Proxy @ks) (Proxy @vs) xs
       xs' <- testToList ht
       L.sort xs' `shouldBe` L.sort ys
 
+    prop_insertDeleteKeysSize :: NonNegative Int -> Property
     prop_insertDeleteKeysSize (NonNegative n) = forAll (listsForRemoveN n) go
       where
         go (insertData, deleteData) = do
@@ -253,11 +259,13 @@ mkSpec ksp vsp = describe (specDescription ksp vsp) $
           kvs <- testToList ht
           L.length insertData - L.length deleteData `shouldBe` L.length kvs
 
+    prop_newIsNull :: IO ()
     prop_newIsNull = do
       ht <- testInit (Proxy @ks) (Proxy @vs) 2
       result <- testNull ht
       result `shouldBe` True
 
+    prop_fromListIsNotNull :: Positive Int -> Property
     prop_fromListIsNotNull (Positive n) = forAll (listN n) $ \xs -> do
       ht <- testFromList (Proxy @ks) (Proxy @vs) xs
       result <- testNull ht
@@ -294,6 +302,7 @@ mkSpec ksp vsp = describe (specDescription ksp vsp) $
       v <- testAt ht x
       v `shouldBe` (negate y)
 
+    prop_union :: Positive Int -> Property
     prop_union (Positive n) = forAll (twoListsN n) $ \(xs, ys) -> do
       ht1 <- testFromList (Proxy @ks) (Proxy @vs) xs
       ht2 <- testFromList (Proxy @ks) (Proxy @vs) ys
