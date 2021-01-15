@@ -211,7 +211,44 @@ insert DRef{..} key' value' = do
         hashCode' = hash key' .&. 0x7FFFFFFFFFFFFFFF
         targetBucket = hashCode' `rem` V.length buckets
 
-    insertWithIndex targetBucket hashCode' key' value' getDRef d =<< buckets ! targetBucket
+        go i    | i >= 0 = do
+                    hc <- hashCode ! i
+                    if hc == hashCode'
+                        then do
+                            k  <- key ! i
+                            if k == key'
+                                then value <~ i $ value'
+                                else go =<< next ! i
+                        else go =<< next ! i
+                | otherwise = addOrResize
+
+        addOrResize = do
+            freeCount <- refs ! getFreeCount
+            if freeCount > 0
+                then do
+                    index <- refs ! getFreeList
+                    nxt <- next ! index
+                    refs <~ getFreeList $ nxt
+                    refs <~ getFreeCount $ freeCount - 1
+                    add index targetBucket
+                else do
+                    count <- refs ! getCount
+                    refs <~ getCount $ count + 1
+                    if count == V.length next
+                        then do
+                            nd <- resize d count hashCode' key' value'
+                            writeMutVar getDRef nd
+                        else add (fromIntegral count) (fromIntegral targetBucket)
+
+        add !index !targetBucket = do
+            hashCode <~ index $ hashCode'
+            b <- buckets ! targetBucket
+            next <~ index $ b
+            key <~ index $ key'
+            value <~ index $ value'
+            buckets <~ targetBucket $ index
+
+    go =<< buckets ! targetBucket
 {-# INLINE insert #-}
 
 insertWithIndex
@@ -312,10 +349,27 @@ instance DeleteEntry B.MVector where
 delete :: (Eq k, MVector ks k, MVector vs v, Hashable k, PrimMonad m, DeleteEntry ks, DeleteEntry vs)
        => Dictionary (PrimState m) ks k vs v -> k -> m ()
 delete DRef{..} key' = do
-    d@Dictionary{..} <- readMutVar getDRef
+    Dictionary{..} <- readMutVar getDRef
     let hashCode' = hash key' .&. 0x7FFFFFFFFFFFFFFF
         bucket = hashCode' `rem` V.length buckets
-    deleteWithIndex bucket hashCode' d key' (-1) =<< buckets ! bucket
+        go !last !i | i >= 0 = do
+            hc <- hashCode ! i
+            k  <- key ! i
+            if hc == hashCode' && k == key' then do
+                nxt <- next ! i
+                if last < 0
+                    then buckets <~ bucket $ nxt
+                    else next <~ last $ nxt
+                hashCode <~ i $ -1
+                next <~ i =<< refs ! getFreeList
+                deleteEntry key i
+                deleteEntry value i
+                refs <~ getFreeList $ i
+                fc <- refs ! getFreeCount
+                refs <~ getFreeCount $ fc + 1
+            else go i =<< next ! i
+            | otherwise = return ()
+    go (-1) =<< buckets ! bucket
 
 {-# INLINE delete #-}
 
@@ -423,7 +477,40 @@ alter ht f k = do
 
   void $ atWithOrElse ht k onFound onNothing
 
-{-# INLINABLE alter #-}
+{-# INLINE alter #-}
+
+alterM
+  :: ( MVector ks k, MVector vs v, DeleteEntry ks, DeleteEntry vs
+     , PrimMonad m, Hashable k, Eq k
+     )
+  => Dictionary (PrimState m) ks k vs v -> (Maybe v -> m (Maybe v)) -> k -> m ()
+alterM ht f k = do
+  d@Dictionary{..} <- readMutVar . getDRef $ ht
+  let
+      hashCode' = hash k .&. 0x7FFFFFFFFFFFFFFF
+      targetBucket = hashCode' `rem` V.length buckets
+
+      onFound' value' dict i = insertWithIndex targetBucket hashCode' k value' (getDRef ht) dict i
+      onNothing' dict i = deleteWithIndex targetBucket hashCode' d k (-1) i
+
+      onFound dict i = do
+        d'@Dictionary{..} <- readMutVar . getDRef $ dict
+        v <- value ! i
+        res <- f (Just v)
+        case res of
+          Nothing -> onNothing' d' i
+          Just v' ->  onFound' v' d' i
+
+      onNothing dict = do
+        d' <- readMutVar . getDRef $ dict
+        res <- f Nothing
+        case res of
+          Nothing -> return ()
+          Just v' -> onFound' v' d' (-1)
+
+  void $ atWithOrElse ht k onFound onNothing
+
+{-# INLINE alterM #-}
 
 -- * Combine
 
