@@ -28,7 +28,8 @@ import qualified Data.Vector.Unboxed.Mutable     as UM
 import           GHC.Generics                    (Generic)
 import           Test.Hspec.QuickCheck           (modifyMaxSuccess)
 import           Test.QuickCheck                 (Arbitrary (..), Gen,
-                                                  NonNegative (..), Property,
+                                                  NonNegative (..),
+                                                  Positive (..), Property,
                                                   choose, elements, forAll,
                                                   generate, property, shuffle,
                                                   vector)
@@ -45,22 +46,31 @@ newtype AlwaysCollide = AC Int
 instance Hashable AlwaysCollide where
     hashWithSalt _ _ = 1
 
+listN :: Int -> Gen [(Int, Int)]
 listN n = do
   keys <- vector n
   vals <- vector n
   let keys' = Set.toList (Set.fromList keys)
   return (zip keys' vals)
 
+shuffledListN :: Int -> Gen ([(Int, Int)], [(Int, Int)])
 shuffledListN n = do
   testData <- listN n
   shuffledTestData <- shuffle testData
   return (testData, shuffledTestData)
 
+listsForRemoveN :: Int -> Gen ([(Int, Int)], [Int])
 listsForRemoveN n = do
   testData <- listN n
   dropCount <- min (n - 1) <$> choose (1, n)
   let deleteData = fst <$> take dropCount testData
   return (testData, deleteData)
+
+twoListsN :: Int -> Gen ([(Int, Int)], [(Int, Int)])
+twoListsN n = do
+  list1 <- listN n
+  list2 <- listN n
+  return (list1, list2)
 
 spec :: Spec
 spec = mutableSpec
@@ -101,6 +111,27 @@ class HashTableTest ks vs where
 
   testLength :: VH.Dictionary (PrimState IO) ks Int vs Int -> IO Int
 
+  testNull :: VH.Dictionary (PrimState IO) ks Int vs Int -> IO Bool
+
+  testMember :: VH.Dictionary (PrimState IO) ks Int vs Int -> Int -> IO Bool
+
+  testAlter :: VH.Dictionary (PrimState IO) ks Int vs Int -> (Maybe Int -> Maybe Int) -> Int -> IO ()
+
+  testUnion
+    :: VH.Dictionary (PrimState IO) ks Int vs Int
+    -> VH.Dictionary (PrimState IO) ks Int vs Int
+    -> IO (VH.Dictionary (PrimState IO) ks Int vs Int)
+
+  testDifference
+    :: VH.Dictionary (PrimState IO) ks Int vs Int
+    -> VH.Dictionary (PrimState IO) ks Int vs Int
+    -> IO (VH.Dictionary (PrimState IO) ks Int vs Int)
+
+  testIntersection
+    :: VH.Dictionary (PrimState IO) ks Int vs Int
+    -> VH.Dictionary (PrimState IO) ks Int vs Int
+    -> IO (VH.Dictionary (PrimState IO) ks Int vs Int)
+
 mkSpec
   :: forall ks vs. (HashTableTest ks vs)
   => Proxy ks -> Proxy vs -> Spec
@@ -134,6 +165,19 @@ mkSpec ksp vsp = describe (specDescription ksp vsp) $
 
       it "deleted entries are not present in key-value list after deleting from hashtable" $
         property prop_insertDeleteKeysSize
+
+      it "new table is null" $ property prop_newIsNull
+
+      it "non-empty table is not null" $ property prop_fromListIsNotNull
+
+      it "inserted key is table member" $ property prop_isMember
+
+      it "deleted key is not a member" $ property prop_isNotMember
+
+      it "when altering is nothing - key deleted from table" $ property prop_alterDelete
+
+      it "when altering is just a result - key updated with result" $ property prop_alterUpdate
+      it "intersection + symmetric difference of two tables is equal to union of two tables" $ property prop_union
 
   where
     prop_insertLookup
@@ -199,11 +243,13 @@ mkSpec ksp vsp = describe (specDescription ksp vsp) $
       v <- testAtCollide ht x1
       v `shouldBe` y1
 
+    prop_fromListToList :: NonNegative Int -> Property
     prop_fromListToList (NonNegative n) = forAll (shuffledListN n) $ \(xs, ys) -> do
       ht <- testFromList (Proxy @ks) (Proxy @vs) xs
       xs' <- testToList ht
       L.sort xs' `shouldBe` L.sort ys
 
+    prop_insertDeleteKeysSize :: NonNegative Int -> Property
     prop_insertDeleteKeysSize (NonNegative n) = forAll (listsForRemoveN n) go
       where
         go (insertData, deleteData) = do
@@ -212,6 +258,67 @@ mkSpec ksp vsp = describe (specDescription ksp vsp) $
           mapM_ (testDelete ht) deleteData
           kvs <- testToList ht
           L.length insertData - L.length deleteData `shouldBe` L.length kvs
+
+    prop_newIsNull :: IO ()
+    prop_newIsNull = do
+      ht <- testInit (Proxy @ks) (Proxy @vs) 2
+      result <- testNull ht
+      result `shouldBe` True
+
+    prop_fromListIsNotNull :: Positive Int -> Property
+    prop_fromListIsNotNull (Positive n) = forAll (listN n) $ \xs -> do
+      ht <- testFromList (Proxy @ks) (Proxy @vs) xs
+      result <- testNull ht
+      result `shouldBe` False
+
+    prop_isMember :: HashTableTest ks vs => (Int, Int) -> IO ()
+    prop_isMember (x, y) = do
+      ht <- testInit (Proxy @ks) (Proxy @vs) 10
+      testInsert ht x y
+      v <- testMember ht x
+      v `shouldBe` True
+
+    prop_isNotMember :: HashTableTest ks vs => (Int, Int) -> IO ()
+    prop_isNotMember (x, y) = do
+      ht <- testInit (Proxy @ks) (Proxy @vs) 10
+      testInsert ht x y
+      testDelete ht x
+      v <- testMember ht x
+      v `shouldBe` False
+
+    prop_alterDelete :: HashTableTest ks vs => (Int, Int) -> IO ()
+    prop_alterDelete (x, y) = do
+      ht <- testInit (Proxy @ks) (Proxy @vs) 10
+      testInsert ht x y
+      testAlter ht (const Nothing) x
+      v <- testMember ht x
+      v `shouldBe` False
+
+    prop_alterUpdate :: HashTableTest ks vs => (Int, Int) -> IO ()
+    prop_alterUpdate (x, y) = do
+      ht <- testInit (Proxy @ks) (Proxy @vs) 10
+      testInsert ht x y
+      testAlter ht (fmap negate) x
+      v <- testAt ht x
+      v `shouldBe` (negate y)
+
+    prop_union :: Positive Int -> Property
+    prop_union (Positive n) = forAll (twoListsN n) $ \(xs, ys) -> do
+      ht1 <- testFromList (Proxy @ks) (Proxy @vs) xs
+      ht2 <- testFromList (Proxy @ks) (Proxy @vs) ys
+      u1  <- testUnion ht1 ht2
+      d1  <- testDifference ht1 ht2
+      d2  <- testDifference ht2 ht1
+      i   <- testIntersection ht1 ht2
+
+      res <- do
+        u2  <- testUnion d1 d2
+        testUnion i u2
+
+      resultList <- testToList res
+      unionList  <- testToList u1
+
+      Set.fromList resultList `shouldBe` Set.fromList unionList
 
 
 instance HashTableTest M.MVector M.MVector where
@@ -224,10 +331,15 @@ instance HashTableTest M.MVector M.MVector where
   testDelete = VH.delete
   testInsertCollide = VH.insert
   testAtCollide = VH.at
-
   testLength = VH.length
   testFromList _ _ = VH.fromList
   testToList = VH.toList
+  testNull = VH.null
+  testMember = VH.member
+  testAlter = VH.alter
+  testUnion = VH.union
+  testDifference = VH.difference
+  testIntersection = VH.intersection
 
 mutableSpec :: Spec
 mutableSpec = mkSpec (Proxy :: Proxy M.MVector) (Proxy :: Proxy M.MVector)
@@ -243,10 +355,15 @@ instance HashTableTest SM.MVector SM.MVector where
   testDelete = VH.delete
   testInsertCollide = VH.insert
   testAtCollide = VH.at
-
   testLength = VH.length
   testFromList _ _ = VH.fromList
   testToList = VH.toList
+  testNull = VH.null
+  testMember = VH.member
+  testAlter = VH.alter
+  testUnion = VH.union
+  testDifference = VH.difference
+  testIntersection = VH.intersection
 
 storableMutableSpec :: Spec
 storableMutableSpec = mkSpec (Proxy @SM.MVector) (Proxy @SM.MVector)
@@ -262,10 +379,15 @@ instance HashTableTest SM.MVector M.MVector where
   testDelete = VH.delete
   testInsertCollide = VH.insert
   testAtCollide = VH.at
-
   testLength = VH.length
   testFromList _ _ = VH.fromList
   testToList = VH.toList
+  testNull = VH.null
+  testMember = VH.member
+  testAlter = VH.alter
+  testUnion = VH.union
+  testDifference = VH.difference
+  testIntersection = VH.intersection
 
 storableKeysSpec :: Spec
 storableKeysSpec = mkSpec (Proxy @SM.MVector) (Proxy @M.MVector)
@@ -281,10 +403,15 @@ instance HashTableTest M.MVector UM.MVector where
   testDelete = VH.delete
   testInsertCollide = VH.insert
   testAtCollide = VH.at
-
   testLength = VH.length
   testFromList _ _ = VH.fromList
   testToList = VH.toList
+  testNull = VH.null
+  testMember = VH.member
+  testAlter = VH.alter
+  testUnion = VH.union
+  testDifference = VH.difference
+  testIntersection = VH.intersection
 
 unboxedKeysSpec :: Spec
 unboxedKeysSpec = mkSpec (Proxy @M.MVector) (Proxy @UM.MVector)
