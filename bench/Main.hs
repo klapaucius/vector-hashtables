@@ -1,94 +1,79 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Main where
+module Main (main) where
 
-import           Criterion.Main                  (bench, defaultMain, nf, nfIO)
-
-import qualified Data.Vector.Hashtables.Internal as VH
 import qualified Data.Vector.Storable            as V
 import qualified Data.Vector.Storable.Mutable    as VM
-
 import qualified Data.Vector.Mutable             as BV
-
+import           Control.Monad.Primitive         (PrimMonad(PrimState))
 import qualified Data.HashTable.IO               as H
 
--- import qualified Data.HashMap.Strict as Map
+import           Criterion.Main                  (bench, bgroup, defaultMain, nfIO)
+import           Criterion                       (Benchmark)
 
-import           Control.Monad
-import           Control.Monad.Primitive
-import           Data.IORef
+import qualified Data.Vector.Hashtables.Internal as VH
 
-n = 100000 :: Int
-
-vh :: IO (VH.Dictionary (PrimState IO) VM.MVector Int VM.MVector Int)
-vh = do
+vh :: Int -> IO (VH.Dictionary (PrimState IO) VM.MVector Int VM.MVector Int)
+vh n = do
     ht <- VH.initialize n :: IO (VH.Dictionary (PrimState IO) VM.MVector Int VM.MVector Int)
     let go !i | i <= n = VH.insert ht i i >> go (i + 1)
               | otherwise = return ()
     go 0
     return ht
 
-fvh :: IO (VH.FrozenDictionary V.Vector Int V.Vector Int)
-fvh = do
-    h <- vh
+fvh :: Int -> IO (VH.FrozenDictionary V.Vector Int V.Vector Int)
+fvh n = do
+    h <- vh n
     c <- VH.clone h
     VH.unsafeFreeze c
 
-bh :: IO (H.BasicHashTable Int Int)
-bh = do
+bh :: Int -> IO (H.BasicHashTable Int Int)
+bh n = do
     ht <- H.newSized n :: IO (H.BasicHashTable Int Int)
     let go !i | i <= n = H.insert ht i i >> go (i + 1)
               | otherwise = return ()
     go 0
     return ht
 
-vhfind :: VH.Dictionary (PrimState IO) VM.MVector Int VM.MVector Int -> IO Int
-vhfind ht = do
+vhfind :: Int -> VH.Dictionary (PrimState IO) VM.MVector Int VM.MVector Int -> IO Int
+vhfind n ht = do
     let go !i !s | i <= n = do
                                 x <- VH.findEntry ht i
                                 go (i + 1) (s + x)
                  | otherwise = return s
     go 0 0
 
-fvhfind :: VH.FrozenDictionary V.Vector Int V.Vector Int -> IO Int
-fvhfind ht = return $ go 0 0 where
+fvhfind :: Int -> VH.FrozenDictionary V.Vector Int V.Vector Int -> IO Int
+fvhfind n ht = return $ go 0 0 where
     go !i !s | i <= n = go (i + 1) (s + VH.findElem ht i)
              | otherwise = s
 
-bhfind :: H.BasicHashTable Int Int -> IO Int
-bhfind ht = do
+bhfind :: Int -> H.BasicHashTable Int Int -> IO Int
+bhfind n ht = do
     let go !i !s | i <= n = do
                                 Just x <- H.lookup ht i
                                 go (i + 1) (s + x)
                  | otherwise = return s
     go 0 0
 
-htb = do
+htb :: Int -> IO ()
+htb n = do
     ht <- H.newSized n :: IO (H.BasicHashTable Int Int)
     let go !i | i <= n = H.insert ht i i >> go (i + 1)
               | otherwise = return ()
     go 0
 
-htc = do
-    ht <- H.newSized n :: IO (H.CuckooHashTable Int Int)
-    let go !i | i <= n = H.insert ht i i >> go (i + 1)
-              | otherwise = return ()
-    go 0
 
-htl = do
-    ht <- H.newSized n :: IO (H.LinearHashTable Int Int)
-    let go !i | i <= n = H.insert ht i i >> go (i + 1)
-              | otherwise = return ()
-    go 0
-
-vht = do
+vht :: Int -> IO ()
+vht n = do
     ht <- VH.initialize n :: IO (VH.Dictionary (PrimState IO) VM.MVector Int VM.MVector Int)
     let go !i | i <= n = VH.insert ht i i >> go (i + 1)
               | otherwise = return ()
     go 0
 
-vhtd = do
+vhtd :: Int -> IO ()
+vhtd n = do
     ht <- VH.initialize n :: IO (VH.Dictionary (PrimState IO) VM.MVector Int VM.MVector Int)
     let go !i | i <= n = VH.insert ht i i >> go (i + 1)
               | otherwise = return ()
@@ -97,7 +82,8 @@ vhtd = do
                | otherwise = return ()
     go1 0
 
-htbd = do
+htbd :: Int -> IO ()
+htbd n = do
     ht <- H.newSized n :: IO (H.BasicHashTable Int Int)
     let go !i | i <= n = H.insert ht i i >> go (i + 1)
               | otherwise = return ()
@@ -106,79 +92,88 @@ htbd = do
                | otherwise = return ()
     go1 0
 
-vhtb = do
+vhtb :: Int -> IO ()
+vhtb n = do
     ht <- VH.initialize n :: IO (VH.Dictionary (PrimState IO) BV.MVector Int BV.MVector Int)
     let go !i | i <= n = VH.insert ht i i >> go (i + 1)
               | otherwise = return ()
     go 0
 
-vhtk = do
+vhtk :: Int -> IO ()
+vhtk n = do
     ht <- VH.initialize n :: IO (VH.Dictionary (PrimState IO) VM.MVector Int BV.MVector Int)
     let go !i | i <= n = VH.insert ht i i >> go (i + 1)
               | otherwise = return ()
     go 0
 
-htbg = do
+htbg :: Int -> IO ()
+htbg n = do
     ht <- H.newSized 1 :: IO (H.BasicHashTable Int Int)
     let go !i | i <= n = H.insert ht i i >> go (i + 1)
               | otherwise = return ()
     go 0
 
-htcg = do
-    ht <- H.newSized 1 :: IO (H.CuckooHashTable Int Int)
-    let go !i | i <= n = H.insert ht i i >> go (i + 1)
-              | otherwise = return ()
-    go 0
-
--- htl = do
---     ht <- H.newSized n :: IO (H.LinearHashTable Int Int)
-
-vhtg = do
+vhtg :: Int -> IO ()
+vhtg n = do
     ht <- VH.initialize 1 :: IO (VH.Dictionary (PrimState IO) VM.MVector Int VM.MVector Int)
     let go !i | i <= n = VH.insert ht i i >> go (i + 1)
               | otherwise = return ()
     go 0
 
-vhtbg = do
+vhtbg :: Int -> IO ()
+vhtbg n = do
     ht <- VH.initialize 1 :: IO (VH.Dictionary (PrimState IO) BV.MVector Int BV.MVector Int)
     let go !i | i <= n = VH.insert ht i i >> go (i + 1)
               | otherwise = return ()
     go 0
 
-vhtkg = do
+vhtkg :: Int -> IO ()
+vhtkg n = do
     ht <- VH.initialize 1 :: IO (VH.Dictionary (PrimState IO) VM.MVector Int BV.MVector Int)
     let go !i | i <= n = VH.insert ht i i >> go (i + 1)
               | otherwise = return ()
     go 0
 
-mvb = do
+mvb :: Int -> IO ()
+mvb n = do
     ht <- BV.new (n+1)
     let go !i | i <= n = BV.write ht i i >> go (i + 1)
               | otherwise = return ()
     go 0
 
-mv = do
+mv :: Int -> IO ()
+mv n = do
     ht <- VM.new (n+1)
     let go !i | i <= n = VM.write ht i i >> go (i + 1)
               | otherwise = return ()
     go 0
 
+
+bgc :: Int -> IO Benchmark
+bgc n = do
+    h <- vh n
+    h2 <- bh n
+    fh <- fvh n
+    return $ bgroup (show n)
+        [ bgroup "insert" 
+            [ bench "hashtables basic"  $ nfIO (htb n)
+            , bench "vector-hashtables boxed" $ nfIO (vhtb n)
+            , bench "vector-hashtables unboxed keys" $ nfIO (vhtk n)
+            , bench "vector-hashtables" $ nfIO (vht n) 
+            , bench "mutable vector boxed" $ nfIO (mvb n)
+            , bench "mutable vector" $ nfIO (mv n) ]
+        , bgroup "insert (resize)"
+            [ bench "hashtables basic"  $ nfIO (htbg n)
+            , bench "vector-hashtables boxed" $ nfIO (vhtbg n)
+            , bench "vector-hashtables unboxed keys" $ nfIO (vhtkg n)
+            , bench "vector-hashtables" $ nfIO (vhtg n) ]
+        , bgroup "insert, delete"
+            [ bench "hashtables basic"  $ nfIO (htbd n)
+            , bench "vector-hashtables" $ nfIO (vhtd n) ]
+        , bgroup "find"
+            [ bench "hashtables basic" $ nfIO (bhfind n h2)
+            , bench "vector-hashtables" $ nfIO (vhfind n h)
+            , bench "vector-hashtables (frozen)" $ nfIO (fvhfind n fh) ]]
+
 main :: IO ()
-main =  do
-    h <- vh
-    h2 <- bh
-    fh <- fvh
-    defaultMain
-        [ bench "insert hashtables basic"  $ nfIO htb
-        , bench "insert hashtables basic (resize)"  $ nfIO htbg
-        , bench "insert hashtables basic (delete)"  $ nfIO htbd
-        , bench "insert vector-hashtables boxed" $ nfIO vhtb
-        , bench "insert vector-hashtables unboxed keys" $ nfIO vhtk
-        , bench "insert vector-hashtables (resize)" $ nfIO vhtg
-        , bench "insert vector-hashtables (delete)" $ nfIO vhtd
-        , bench "insert vector-hashtables" $ nfIO vht
-        , bench "insert mutable vector boxed" $ nfIO mvb
-        , bench "insert mutable vector" $ nfIO mv
-        , bench "find hashtables basic" $ nfIO (bhfind h2)
-        , bench "find vector-hashtables" $ nfIO (vhfind h)
-        , bench "find vector-hashtables (frozen)" $ nfIO (fvhfind fh) ]
+main = defaultMain =<< mapM bgc [1000,10000,100000,1000000]
