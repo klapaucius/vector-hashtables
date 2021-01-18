@@ -22,25 +22,28 @@ import qualified Data.Vector.Unboxed.Mutable  as U
 import qualified GHC.Exts                     as Exts
 import           Prelude                      hiding (length, lookup)
 
-type IntArray s = S.MVector s Int
+import qualified Data.Primitive.PrimArray as A
+import qualified Data.Primitive.PrimArray.Utils as A
+
+type IntArray s = A.MutablePrimArray s Int
 
 newtype Dictionary s ks k vs v = DRef { getDRef :: MutVar s (Dictionary_ s ks k vs v) }
 
 data FrozenDictionary ks k vs v = FrozenDictionary {
     fhashCode,
     fnext,
-    fbuckets :: SI.Vector Int,
+    fbuckets :: A.PrimArray Int,
     count, freeList, freeCount :: Int,
     fkey :: ks k,
     fvalue :: vs v
-} deriving (Eq, Ord, Read, Show)
+} deriving (Eq, Ord, Show)
 
 findElem :: (Vector ks k, Vector vs v, Hashable k, Eq k)
          => FrozenDictionary ks k vs v -> k -> Int
-findElem FrozenDictionary{..} key' = go $ fbuckets !. (hashCode' `rem` VI.length fbuckets) where
+findElem FrozenDictionary{..} key' = go $ fbuckets !. (hashCode' `rem` A.sizeofPrimArray fbuckets) where
     hashCode' = hash key' .&. 0x7FFFFFFFFFFFFFFF
     go i | i >= 0 =
-            if fhashCode !. i == hashCode' && fkey !. i == key'
+            if fhashCode !. i == hashCode' && fkey !.~ i == key'
                 then i else go $ fnext !. i
          | otherwise = -1
 {-# INLINE findElem #-}
@@ -59,14 +62,23 @@ getCount = 0
 getFreeList = 1
 getFreeCount = 2
 
-(!) :: (MVector v a, PrimMonad m) => v (PrimState m) a -> Int -> m a
-(!) = V.unsafeRead
+(!~) :: (MVector v a, PrimMonad m) => v (PrimState m) a -> Int -> m a
+(!~) = V.unsafeRead
 
-(!.) :: (Vector v a) => v a -> Int -> a
-(!.) = VI.unsafeIndex
+(!.~) :: (Vector v a) => v a -> Int -> a
+(!.~) = VI.unsafeIndex
 
-(<~) :: (MVector v a, PrimMonad m) => v (PrimState m) a -> Int -> a -> m ()
-(<~) = V.unsafeWrite
+(<~~) :: (MVector v a, PrimMonad m) => v (PrimState m) a -> Int -> a -> m ()
+(<~~) = V.unsafeWrite
+
+(!) :: PrimMonad m => A.MutablePrimArray (PrimState m) Int -> Int -> m Int
+(!) = A.readPrimArray 
+
+(!.) :: A.PrimArray Int -> Int -> Int
+(!.) = A.indexPrimArray
+
+(<~) :: PrimMonad m => A.MutablePrimArray (PrimState m) Int -> Int -> Int -> m ()
+(<~) = A.writePrimArray
 
 initialize
     :: (MVector ks k, MVector vs v, PrimMonad m)
@@ -74,12 +86,12 @@ initialize
     -> m (Dictionary (PrimState m) ks k vs v)
 initialize capacity = do
     let size = getPrime capacity
-    hashCode <- V.replicate size 0
-    next     <- V.replicate size 0
+    hashCode <- A.replicate size 0
+    next     <- A.replicate size 0
     key      <- V.new size
     value    <- V.new size
-    buckets  <- V.replicate size (-1)
-    refs     <- V.replicate 3 0
+    buckets  <- A.replicate size (-1)
+    refs     <- A.replicate 3 0
     refs     <~ 1 $ -1
     dr       <- newMutVar Dictionary {..}
     return . DRef $ dr
@@ -90,12 +102,12 @@ clone
     -> m (Dictionary (PrimState m) ks k vs v)
 clone DRef {..} = do
     Dictionary {..} <- readMutVar getDRef
-    hashCode        <- V.clone hashCode
-    next            <- V.clone next
+    hashCode        <- A.clone hashCode
+    next            <- A.clone next
     key             <- V.clone key
     value           <- V.clone value
-    buckets         <- V.clone buckets
-    refs            <- V.clone refs
+    buckets         <- A.clone buckets
+    refs            <- A.clone refs
     dr              <- newMutVar Dictionary {..}
     return . DRef $ dr
 
@@ -106,9 +118,9 @@ unsafeFreeze
     -> m (FrozenDictionary ks k vs v)
 unsafeFreeze DRef {..} = do
     Dictionary {..} <- readMutVar getDRef
-    fhashCode       <- VI.unsafeFreeze hashCode
-    fnext           <- VI.unsafeFreeze next
-    fbuckets        <- VI.unsafeFreeze buckets
+    fhashCode       <- A.unsafeFreeze hashCode
+    fnext           <- A.unsafeFreeze next
+    fbuckets        <- A.unsafeFreeze buckets
     count           <- refs ! getCount
     freeList        <- refs ! getFreeList
     freeCount       <- refs ! getFreeCount
@@ -122,10 +134,10 @@ unsafeThaw
     => FrozenDictionary ks k vs v
     -> m (Dictionary (PrimState m) (Mutable ks) k (Mutable vs) v)
 unsafeThaw FrozenDictionary {..} = do
-    hashCode <- VI.unsafeThaw fhashCode
-    next     <- VI.unsafeThaw fnext
-    buckets  <- VI.unsafeThaw fbuckets
-    refs     <- VI.unsafeThaw $ SI.fromListN 3 [count, freeList, freeCount]
+    hashCode <- A.unsafeThaw fhashCode
+    next     <- A.unsafeThaw fnext
+    buckets  <- A.unsafeThaw fbuckets
+    refs     <- A.unsafeThaw $ A.primArrayFromListN 3 [count, freeList, freeCount]
     key      <- VI.unsafeThaw fkey
     value    <- VI.unsafeThaw fvalue
     dr       <- newMutVar Dictionary {..}
@@ -136,19 +148,19 @@ values :: (Vector vs v, PrimMonad m)
        => Dictionary (PrimState m) ks k (Mutable vs) v -> m (vs v)
 values DRef{..} = do
     Dictionary{..} <- readMutVar getDRef
-    hcs <- SI.freeze hashCode
+    hcs <- A.freeze hashCode
     vs <- VI.freeze value
     count <- refs ! getCount
-    return . VI.ifilter (\i _ -> hcs VI.! i >= 0) . VI.take count $ vs
+    return . VI.ifilter (\i _ -> hcs !. i >= 0) . VI.take count $ vs
 
 keys :: (Vector ks k, PrimMonad m)
      => Dictionary (PrimState m) (Mutable ks) k vs v -> m (ks k)
 keys DRef{..} = do
     Dictionary{..} <- readMutVar getDRef
-    hcs <- SI.freeze hashCode
+    hcs <- A.freeze hashCode
     ks <- VI.freeze key
     count <- refs ! getCount
-    return . VI.ifilter (\i _ -> hcs VI.! i >= 0) . VI.take count $ ks
+    return . VI.ifilter (\i _ -> hcs !. i >= 0) . VI.take count $ ks
 
 at :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
    => Dictionary (PrimState m) ks k vs v -> k -> m v
@@ -157,7 +169,7 @@ at d k = do
     if i >= 0
         then do
             Dictionary{..} <- readMutVar . getDRef $ d
-            value ! i
+            value !~ i
         else error "KeyNotFoundException!"
 {-# INLINE at #-}
 
@@ -168,7 +180,7 @@ at' d k = do
   if i >= 0
       then do
           Dictionary{..} <- readMutVar . getDRef $ d
-          Just <$> value ! i
+          Just <$> value !~ i
       else pure Nothing
 {-# INLINE at' #-}
 
@@ -194,13 +206,13 @@ findEntry d key' = do
                 hc <- hashCode ! i
                 if hc == hashCode'
                     then do
-                        k <- key ! i
+                        k <- key !~ i
                         if k == key'
                             then return i
                             else go =<< next ! i
                     else go =<< next ! i
              | otherwise = return $ -1
-    go =<< buckets ! (hashCode' `rem` V.length buckets)
+    go =<< buckets ! (hashCode' `rem` A.length buckets)
 {-# INLINE findEntry #-}
 
 insert :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
@@ -209,15 +221,15 @@ insert DRef{..} key' value' = do
     d@Dictionary{..} <- readMutVar getDRef
     let
         hashCode' = hash key' .&. 0x7FFFFFFFFFFFFFFF
-        targetBucket = hashCode' `rem` V.length buckets
+        targetBucket = hashCode' `rem` A.length buckets
 
         go i    | i >= 0 = do
                     hc <- hashCode ! i
                     if hc == hashCode'
                         then do
-                            k  <- key ! i
+                            k  <- key !~ i
                             if k == key'
-                                then value <~ i $ value'
+                                then value <~~ i $ value'
                                 else go =<< next ! i
                         else go =<< next ! i
                 | otherwise = addOrResize
@@ -234,7 +246,7 @@ insert DRef{..} key' value' = do
                 else do
                     count <- refs ! getCount
                     refs <~ getCount $ count + 1
-                    if count == V.length next
+                    if count == A.length next
                         then do
                             nd <- resize d count hashCode' key' value'
                             writeMutVar getDRef nd
@@ -244,8 +256,8 @@ insert DRef{..} key' value' = do
             hashCode <~ index $ hashCode'
             b <- buckets ! targetBucket
             next <~ index $ b
-            key <~ index $ key'
-            value <~ index $ value'
+            key <~~ index $ key'
+            value <~~ index $ value'
             buckets <~ targetBucket $ index
 
     go =<< buckets ! targetBucket
@@ -259,9 +271,9 @@ insertWithIndex !targetBucket !hashCode' key' value' getDRef d@Dictionary{..} i
            hc <- hashCode ! i
            if hc == hashCode'
                then do
-                   k  <- key ! i
+                   k  <- key !~ i
                    if k == key'
-                       then value <~ i $ value'
+                       then value <~~ i $ value'
                        else insertWithIndex targetBucket hashCode' key' value' getDRef d =<< next ! i
                else insertWithIndex targetBucket hashCode' key' value' getDRef d =<< next ! i
       | otherwise = addOrResize targetBucket hashCode' key' value' getDRef d
@@ -282,7 +294,7 @@ addOrResize !targetBucket !hashCode' !key' !value' dref d@Dictionary{..}  = do
         else do
             count <- refs ! getCount
             refs <~ getCount $ count + 1
-            if count == V.length next
+            if count == A.length next
                 then do
                     nd <- resize d count hashCode' key' value'
                     writeMutVar dref nd
@@ -295,8 +307,8 @@ add !index !targetBucket !hashCode' !key' !value' Dictionary{..} = do
     hashCode <~ index $ hashCode'
     b <- buckets ! targetBucket
     next <~ index $ b
-    key <~ index $ key'
-    value <~ index $ value'
+    key <~~ index $ key'
+    value <~~ index $ value'
     buckets <~ targetBucket $ index
 {-# INLINE add #-}
 
@@ -305,10 +317,10 @@ resize Dictionary{..} index hashCode' key' value' = do
     let newSize = getPrime (index*2)
         delta = newSize - index
 
-    buckets <- V.replicate newSize (-1)
+    buckets <- A.replicate newSize (-1)
 
-    hashCode <- V.grow hashCode delta
-    next <- V.grow next delta
+    hashCode <- A.growNoZ hashCode delta
+    next <- A.growNoZ next delta
     key <- V.grow key delta
     value <- V.grow value delta
 
@@ -323,12 +335,12 @@ resize Dictionary{..} index hashCode' key' value' = do
              | otherwise = return ()
     go 0
 
-    let targetBucket = hashCode' `rem` V.length buckets
+    let targetBucket = hashCode' `rem` A.length buckets
     hashCode <~ index $ hashCode'
     b <- buckets ! targetBucket
     next <~ index $ b
-    key <~ index $ key'
-    value <~ index $ value'
+    key <~~ index $ key'
+    value <~~ index $ value'
     buckets <~ targetBucket $ index
     return Dictionary{..}
 
@@ -344,17 +356,17 @@ instance DeleteEntry U.MVector where
     deleteEntry _ _ = return ()
 
 instance DeleteEntry B.MVector where
-    deleteEntry v i = v <~ i $ undefined
+    deleteEntry v i = v <~~ i $ undefined
 
 delete :: (Eq k, MVector ks k, MVector vs v, Hashable k, PrimMonad m, DeleteEntry ks, DeleteEntry vs)
        => Dictionary (PrimState m) ks k vs v -> k -> m ()
 delete DRef{..} key' = do
     Dictionary{..} <- readMutVar getDRef
     let hashCode' = hash key' .&. 0x7FFFFFFFFFFFFFFF
-        bucket = hashCode' `rem` V.length buckets
+        bucket = hashCode' `rem` A.length buckets
         go !last !i | i >= 0 = do
             hc <- hashCode ! i
-            k  <- key ! i
+            k  <- key !~ i
             if hc == hashCode' && k == key' then do
                 nxt <- next ! i
                 if last < 0
@@ -379,7 +391,7 @@ deleteWithIndex
 deleteWithIndex !bucket !hashCode' d@Dictionary{..} key' !last !i
   | i >= 0 = do
       hc <- hashCode ! i
-      k <- key ! i
+      k <- key !~ i
       if hc == hashCode' && k == key' then do
           nxt <- next ! i
           if last < 0
@@ -457,14 +469,14 @@ alter ht f k = do
   d@Dictionary{..} <- readMutVar . getDRef $ ht
   let
       hashCode' = hash k .&. 0x7FFFFFFFFFFFFFFF
-      targetBucket = hashCode' `rem` V.length buckets
+      targetBucket = hashCode' `rem` A.length buckets
 
       onFound' value' dict i = insertWithIndex targetBucket hashCode' k value' (getDRef ht) dict i
       onNothing' dict i = deleteWithIndex targetBucket hashCode' d k (-1) i
 
       onFound dict i = do
         d'@Dictionary{..} <- readMutVar . getDRef $ dict
-        v <- value ! i
+        v <- value !~ i
         case f (Just v) of
           Nothing -> onNothing' d' i
           Just v' ->  onFound' v' d' i
@@ -488,14 +500,14 @@ alterM ht f k = do
   d@Dictionary{..} <- readMutVar . getDRef $ ht
   let
       hashCode' = hash k .&. 0x7FFFFFFFFFFFFFFF
-      targetBucket = hashCode' `rem` V.length buckets
+      targetBucket = hashCode' `rem` A.length buckets
 
       onFound' value' dict i = insertWithIndex targetBucket hashCode' k value' (getDRef ht) dict i
       onNothing' dict i = deleteWithIndex targetBucket hashCode' d k (-1) i
 
       onFound dict i = do
         d'@Dictionary{..} <- readMutVar . getDRef $ dict
-        v <- value ! i
+        v <- value !~ i
         res <- f (Just v)
         case res of
           Nothing -> onNothing' d' i
@@ -554,21 +566,21 @@ unionWithKey f t1 t2 = do
   ht <- clone tG
   dictG <- readMutVar . getDRef $ tG
   dictS <- readMutVar . getDRef $ tS
-  hcsS <- SI.freeze . hashCode $ dictS
-  let indices = catMaybes . zipWith collect [0 ..] . VI.toList . VI.take smallest $ hcsS
-      collect i _ | hcsS VI.! i >= 0 = Just i
+  hcsS <- A.freeze . hashCode $ dictS
+  let indices = catMaybes . zipWith collect [0 ..] . take smallest . A.primArrayToList $ hcsS
+      collect i _ | hcsS !. i >= 0 = Just i
                   | otherwise       = Nothing
 
       go i = do
-        k <- key dictS ! i
-        v <- value dictS ! i
+        k <- key dictS !~ i
+        v <- value dictS !~ i
         let
            hashCode' = hash k .&. 0x7FFFFFFFFFFFFFFF
-           targetBucket = hashCode' `rem` V.length (buckets dictG)
+           targetBucket = hashCode' `rem` A.length (buckets dictG)
 
            onFound dict i = do
              d@Dictionary{..} <- readMutVar . getDRef $ dict
-             vG <- value ! i
+             vG <- value !~ i
              insertWithIndex targetBucket hashCode' k (g k v vG) (getDRef dict) d i
 
            onNothing dict = do
@@ -704,14 +716,14 @@ toList
   => (Dictionary (PrimState m) ks k vs v) -> m [(k, v)]
 toList DRef {..} = do
     Dictionary {..} <- readMutVar getDRef
-    hcs <- SI.freeze hashCode
+    hcs <- A.freeze hashCode
     count <- refs ! getCount
-    let indeces = catMaybes . zipWith collect [0..] . VI.toList . VI.take count $ hcs
-        collect i _ | hcs VI.! i >= 0 = Just i
+    let indeces = catMaybes . zipWith collect [0..] . take count . A.primArrayToList $ hcs
+        collect i _ | hcs !. i >= 0 = Just i
                     | otherwise       = Nothing
         go i = do
-          k <- key ! i
-          v <- value ! i
+          k <- key !~ i
+          v <- value !~ i
           return (k, v)
     mapM go indeces
 
