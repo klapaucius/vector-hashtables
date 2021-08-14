@@ -176,4 +176,128 @@ bgc n = do
             , bench "vector-hashtables (frozen)" $ nfIO (fvhfind n fh) ]]
 
 main :: IO ()
-main = defaultMain =<< mapM bgc [1000,10000,100000,1000000]
+main = do
+    let inputs = [1000,10000,100000,1000000]
+    comparisonBench <- mapM bgc inputs
+    utilitiesBench  <- mapM utilities inputs
+    defaultMain
+        [ bgroup "Comparison" comparisonBench
+        , bgroup "Utilities"  utilitiesBench
+        ]
+
+-- ** Utilities benchmark
+
+utilities n = do
+    -- utilities input data
+    hAt' <- vh n
+    hInsert <- vh n
+    hDelete <- vh n
+    hLookup <- vh n
+    hLookup' <- vh n
+    hLookupIndex <- vh n
+    hNull <- vh n
+    hLength <- vh n
+    hSize <- vh n
+    hMember <- vh n
+    hFindWithDefault <- vh n
+    hAlter <- vh n
+    hAlterM <- vh n
+    hUnion1 <- vh n
+    hUnion2 <- vh n
+    hDifference1 <- vh n
+    hDifference2 <- vh n
+    hIntersection1 <- vh n
+    hIntersection2 <- vh n
+    hFromList <- VH.toList =<< vh n
+    hToList <- vh n
+
+    return $ bgroup (show n)
+        [ bench "at'" $ nfIO (bhuat' n hAt')
+        , bench "insert" $ nfIO (bhuinsert n hInsert)
+        , bench "delete" $ nfIO (bhudelete n hDelete)
+        , bench "lookup" $ nfIO (bhulookup n hLookup)
+        , bench "lookup'" $ nfIO (bhulookup' n hLookup')
+        , bench "lookupIndex" $ nfIO (bhulookupIndex n hLookupIndex)
+        , bench "null" $ nfIO (bhunull hNull)
+        , bench "length" $ nfIO (bhulength hLength)
+        , bench "size" $ nfIO (bhusize hSize)
+        , bench "member" $ nfIO (bhumember n hMember)
+        , bench "findWithDefault" $ nfIO (bhufindWithDefault n hFindWithDefault)
+        , bench "alter" $ nfIO (bhualter n hAlter)
+        , bench "alterM" $ nfIO (bhualterM n hAlterM)
+        , bench "union" $ nfIO (bhuunion hUnion1 hUnion2)
+        , bench "difference" $ nfIO (bhudifference hDifference1 hDifference2)
+        , bench "intersection" $ nfIO (bhuintersection hIntersection1 hIntersection2)
+        , bench "fromList" $ nfIO (bhufromList hFromList)
+        , bench "toList" $ nfIO (VH.toList hToList)
+        ]
+
+bhuat' n ht = do
+    let go !i | i <= n = VH.at' ht i >> go (i + 1)
+              | otherwise = return ()
+    go 0
+
+bhuinsert n ht = do
+    let go !i | i <= n = VH.insert ht i i >> go (i + 1)
+              | otherwise = return ()
+    go 0
+
+bhudelete n ht = do
+    let go !i | i <= n = VH.delete ht i >> go (i + 1)
+              | otherwise = return ()
+    go 0
+
+bhulookup n ht = do
+    let go !i | i <= n = VH.lookup ht i >> go (i + 1)
+              | otherwise = return ()
+    go 0
+
+bhulookup' n ht = do
+    let go !i | i <= n = VH.lookup' ht i >> go (i + 1)
+              | otherwise = return ()
+    go 0
+
+bhulookupIndex n ht = do
+    let go !i | i <= n = VH.lookupIndex ht i >> go (i + 1)
+              | otherwise = return ()
+    go 0
+
+bhunull = VH.null
+
+bhulength = VH.length
+
+bhusize = VH.size
+
+bhumember n ht = do
+    let go !i | i <= n = VH.member ht i >> go (i + 1)
+              | otherwise = return ()
+    go 0
+
+bhufindWithDefault n ht = do
+    let go !i | i <= n = VH.findWithDefault ht 0 i >> go (i + 1)
+              | otherwise = return ()
+    go 0
+
+bhualter n ht = do
+    let go !i | i <= n = VH.alter ht (fmap succ) i >> go (i + 1)
+              | otherwise = return ()
+    go 0
+
+bhualterM :: Int -> VH.Dictionary (PrimState IO) VM.MVector Int VM.MVector Int -> IO ()
+bhualterM n ht = do
+    let f = return . fmap succ
+        go !i | i <= n = VH.alterM ht f i >> go (i + 1)
+              | otherwise = return ()
+    go 0
+
+bhuunion ht1 ht2 = VH.union ht1 ht2 >> return ()
+
+bhudifference ht1 ht2 = VH.difference ht1 ht2 >> return ()
+
+bhuintersection ht1 ht2 = VH.intersection ht1 ht2 >> return ()
+
+bhufromList htlist = do
+  ht <- VH.fromList htlist :: IO (VH.Dictionary (PrimState IO) VM.MVector Int VM.MVector Int)
+  return ()
+
+bhutoList ht = VH.toList ht >> return ()
