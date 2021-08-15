@@ -36,6 +36,11 @@ bh n = do
     go 0
     return ht
 
+fl :: Int -> [(Int, Int)]
+fl n = mkPair <$> [0 .. n]
+  where
+    mkPair !x = (x, x)
+
 vhfind :: Int -> VH.Dictionary (PrimState IO) VM.MVector Int VM.MVector Int -> IO Int
 vhfind n ht = do
     let go !i !s | i <= n = do
@@ -148,12 +153,40 @@ mv n = do
               | otherwise = return ()
     go 0
 
+bhfromList l = do
+  _bht <- H.fromList l :: IO (H.BasicHashTable Int Int)
+  return ()
+
+vhfromList l = do
+  _ht <- VH.fromList l :: IO (VH.Dictionary (PrimState IO) VM.MVector Int VM.MVector Int)
+  return ()
+
+bhlookupIndex :: Int -> H.BasicHashTable Int Int -> IO Int
+bhlookupIndex n ht = do
+    let go !i !s | i <= n = do
+                                Just x <- H.lookupIndex ht i
+                                go (i + 1) (s + fromIntegral x)
+                 | otherwise = return s
+    go 0 0
+
+vhlookupIndex :: Int -> VH.Dictionary (PrimState IO) VM.MVector Int VM.MVector Int -> IO Int
+vhlookupIndex n ht = do
+    let go !i !s | i <= n = do
+                                Just x <- VH.lookupIndex ht i
+                                go (i + 1) (s + x)
+                 | otherwise = return s
+    go 0 0
+
+bhtoList = H.toList
+
+vhtoList = VH.toList
 
 bgc :: Int -> IO Benchmark
 bgc n = do
     h <- vh n
     h2 <- bh n
     fh <- fvh n
+    let l = fl n
     return $ bgroup (show n)
         [ bgroup "insert" 
             [ bench "hashtables basic"  $ nfIO (htb n)
@@ -173,7 +206,16 @@ bgc n = do
         , bgroup "find"
             [ bench "hashtables basic" $ nfIO (bhfind n h2)
             , bench "vector-hashtables" $ nfIO (vhfind n h)
-            , bench "vector-hashtables (frozen)" $ nfIO (fvhfind n fh) ]]
+            , bench "vector-hashtables (frozen)" $ nfIO (fvhfind n fh) ]
+        , bgroup "lookupIndex"
+            [ bench "hashtables basic" $ nfIO (bhlookupIndex n h2)
+            , bench "vector-hashtables" $ nfIO (vhlookupIndex n h) ]
+        , bgroup "fromList"
+            [ bench "hashtables basic" $ nfIO (bhfromList l)
+            , bench "vector-hashtables" $ nfIO (vhfromList l) ]
+        , bgroup "toList"
+            [ bench "hashtables basic" $ nfIO (bhtoList h2)
+            , bench "vector-hashtables" $ nfIO (vhtoList h) ]]
 
 main :: IO ()
 main = do
@@ -182,8 +224,7 @@ main = do
     utilitiesBench  <- mapM utilities inputs
     defaultMain
         [ bgroup "Comparison" comparisonBench
-        , bgroup "Utilities"  utilitiesBench
-        ]
+        , bgroup "Utilities"  utilitiesBench ]
 
 -- ** Utilities benchmark
 
@@ -229,8 +270,7 @@ utilities n = do
         , bench "difference" $ nfIO (bhudifference hDifference1 hDifference2)
         , bench "intersection" $ nfIO (bhuintersection hIntersection1 hIntersection2)
         , bench "fromList" $ nfIO (bhufromList hFromList)
-        , bench "toList" $ nfIO (VH.toList hToList)
-        ]
+        , bench "toList" $ nfIO (VH.toList hToList) ]
 
 bhuat' n ht = do
     let go !i | i <= n = VH.at' ht i >> go (i + 1)
