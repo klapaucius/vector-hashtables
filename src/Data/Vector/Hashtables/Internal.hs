@@ -536,9 +536,10 @@ union
   -> m (Dictionary (PrimState m) ks k vs v)
 union = unionWith const
 
+{-# INLINE union #-}
+
 -- | The union of two maps.
--- If a key occurs in both maps,
--- the provided function (first argument) will be used to compute the result.
+-- The provided function (first argument) will be used to compute the result.
 unionWith
   :: (MVector ks k, MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
   => (v -> v -> v)
@@ -546,6 +547,8 @@ unionWith
   -> Dictionary (PrimState m) ks k vs v
   -> m (Dictionary (PrimState m) ks k vs v)
 unionWith f = unionWithKey (const f)
+
+{-# INLINE unionWith #-}
 
 -- | The union of two maps.
 -- If a key occurs in both maps,
@@ -571,7 +574,7 @@ unionWithKey f t1 t2 = do
       collect i _ | hcsS !. i >= 0 = Just i
                   | otherwise       = Nothing
 
-      go i = do
+      go !i = do
         k <- key dictS !~ i
         v <- value dictS !~ i
         let
@@ -592,6 +595,8 @@ unionWithKey f t1 t2 = do
   mapM_ go indices
   return ht
 
+{-# INLINE unionWithKey #-}
+
 -- * Difference and intersection
 
 -- | Difference of two tables. Return elements of the first table
@@ -607,12 +612,12 @@ difference a b = do
   mapM_ (go ht) kvs
   return ht
   where
-    go ht (k, v) = do
+    go ht (!k, !v) = do
       mv <- lookup b k
       case mv of
         Nothing -> insert ht k v
         _       -> return ()
-{-# INLINABLE difference #-}
+{-# INLINE difference #-}
 
 -- | Difference with a combining function. When two equal keys are
 -- encountered, the combining function is applied to the values of these keys.
@@ -630,12 +635,12 @@ differenceWith f a b = do
   mapM_ (go ht) kvs
   return ht
   where
-    go ht (k, v) = do
+    go ht (!k, !v) = do
       mv <- lookup b k
       case mv of
         Nothing -> insert ht k v
         Just w  -> maybe (return ()) (insert ht k) (f v w)
-{-# INLINABLE differenceWith #-}
+{-# INLINE differenceWith #-}
 
 -- | Intersection of two maps. Return elements of the first
 -- map for keys existing in the second.
@@ -650,12 +655,12 @@ intersection a b = do
   mapM_ (go ht) kvs
   return ht
   where
-    go ht (k, v) = do
+    go ht (!k, !v) = do
       mv <- lookup b k
       case mv of
         Nothing -> return ()
         Just _  -> insert ht k v
-{-# INLINABLE intersection #-}
+{-# INLINE intersection #-}
 
 -- | Intersection of two maps. If a key occurs in both maps
 -- the provided function is used to combine the values from the two
@@ -672,12 +677,12 @@ intersectionWith f a b = do
   mapM_ (go ht) kvs
   return ht
   where
-    go ht (k, v) = do
+    go ht (!k, !v) = do
       mv <- lookup b k
       case mv of
         Nothing -> return ()
         Just w  -> insert ht k (f v w)
-{-# INLINABLE intersectionWith #-}
+{-# INLINE intersectionWith #-}
 
 -- | Intersection of two maps. If a key occurs in both maps
 -- the provided function is used to combine the values from the two
@@ -694,12 +699,12 @@ intersectionWithKey f a b = do
   mapM_ (go ht) kvs
   return ht
   where
-    go ht (k, v) = do
+    go ht (!k, !v) = do
       mv <- lookup b k
       case mv of
         Nothing -> return ()
         Just w  -> insert ht k (f k v w)
-{-# INLINABLE intersectionWithKey #-}
+{-# INLINE intersectionWithKey #-}
 
 -- * List conversions
 
@@ -711,6 +716,8 @@ fromList kv = do
     mapM_ (uncurry (insert ht)) kv
     return ht
 
+{-# INLINE fromList #-}
+
 toList
   :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
   => (Dictionary (PrimState m) ks k vs v) -> m [(k, v)]
@@ -718,14 +725,16 @@ toList DRef {..} = do
     Dictionary {..} <- readMutVar getDRef
     hcs <- A.freeze hashCode
     count <- refs ! getCount
-    let indeces = catMaybes . zipWith collect [0..] . take count . A.primArrayToList $ hcs
-        collect i _ | hcs !. i >= 0 = Just i
-                    | otherwise       = Nothing
-        go i = do
-          k <- key !~ i
-          v <- value !~ i
-          return (k, v)
-    mapM go indeces
+    let go !i xs
+          | i < 0 = return xs
+          | hcs !. i < 0 = go (i - 1) xs
+          | otherwise = do
+              k <- key !~ i
+              v <- value !~ i
+              go (i - 1) ((k, v) : xs)
+        {-# INLINE go #-}
+    go (count - 1) []
+{-# INLINE toList #-}
 
 -- * Extras
 
