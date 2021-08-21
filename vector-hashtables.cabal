@@ -10,12 +10,18 @@ maintainer:          example@example.com
 copyright:           2016 klapaucius
 category:            Web
 build-type:          Simple
-extra-source-files:  README.md
+extra-source-files:  README.md,
+                     src-i386/Data/Vector/Hashtables/Internal/Mask.hs,
+                     src-gen/Data/Vector/Hashtables/Internal/Mask.hs
 cabal-version:       >=1.10
 
 library
-  hs-source-dirs:      src
+  if arch(i386)
+    hs-source-dirs:    src, src-i386
+  else
+    hs-source-dirs:    src, src-gen
   exposed-modules:     Data.Vector.Hashtables.Internal,
+                       Data.Vector.Hashtables.Internal.Mask,
                        Data.Primitive.PrimArray.Utils
   ghc-options:         -O2
   build-depends:       base >= 4.7 && < 5
