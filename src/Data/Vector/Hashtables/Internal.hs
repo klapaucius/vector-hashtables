@@ -25,6 +25,8 @@ import           Prelude                      hiding (length, lookup)
 import qualified Data.Primitive.PrimArray as A
 import qualified Data.Primitive.PrimArray.Utils as A
 
+import           Data.Vector.Hashtables.Internal.Mask (mask)
+
 type IntArray s = A.MutablePrimArray s Int
 
 newtype Dictionary s ks k vs v = DRef { getDRef :: MutVar s (Dictionary_ s ks k vs v) }
@@ -41,7 +43,7 @@ data FrozenDictionary ks k vs v = FrozenDictionary {
 findElem :: (Vector ks k, Vector vs v, Hashable k, Eq k)
          => FrozenDictionary ks k vs v -> k -> Int
 findElem FrozenDictionary{..} key' = go $ fbuckets !. (hashCode' `rem` A.sizeofPrimArray fbuckets) where
-    hashCode' = hash key' .&. 0x7FFFFFFFFFFFFFFF
+    hashCode' = hash key' .&. mask
     go i | i >= 0 =
             if fhashCode !. i == hashCode' && fkey !.~ i == key'
                 then i else go $ fnext !. i
@@ -201,7 +203,7 @@ findEntry :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
           => Dictionary (PrimState m) ks k vs v -> k -> m Int
 findEntry d key' = do
     Dictionary{..} <- readMutVar . getDRef $ d
-    let hashCode' = hash key' .&. 0x7FFFFFFFFFFFFFFF
+    let hashCode' = hash key' .&. mask
         go i | i >= 0 = do
                 hc <- hashCode ! i
                 if hc == hashCode'
@@ -220,7 +222,7 @@ insert :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
 insert DRef{..} key' value' = do
     d@Dictionary{..} <- readMutVar getDRef
     let
-        hashCode' = hash key' .&. 0x7FFFFFFFFFFFFFFF
+        hashCode' = hash key' .&. mask
         targetBucket = hashCode' `rem` A.length buckets
 
         go i    | i >= 0 = do
@@ -362,7 +364,7 @@ delete :: (Eq k, MVector ks k, MVector vs v, Hashable k, PrimMonad m, DeleteEntr
        => Dictionary (PrimState m) ks k vs v -> k -> m ()
 delete DRef{..} key' = do
     Dictionary{..} <- readMutVar getDRef
-    let hashCode' = hash key' .&. 0x7FFFFFFFFFFFFFFF
+    let hashCode' = hash key' .&. mask
         bucket = hashCode' `rem` A.length buckets
         go !last !i | i >= 0 = do
             hc <- hashCode ! i
@@ -468,7 +470,7 @@ alter
 alter ht f k = do
   d@Dictionary{..} <- readMutVar . getDRef $ ht
   let
-      hashCode' = hash k .&. 0x7FFFFFFFFFFFFFFF
+      hashCode' = hash k .&. mask
       targetBucket = hashCode' `rem` A.length buckets
 
       onFound' value' dict i = insertWithIndex targetBucket hashCode' k value' (getDRef ht) dict i
@@ -499,7 +501,7 @@ alterM
 alterM ht f k = do
   d@Dictionary{..} <- readMutVar . getDRef $ ht
   let
-      hashCode' = hash k .&. 0x7FFFFFFFFFFFFFFF
+      hashCode' = hash k .&. mask
       targetBucket = hashCode' `rem` A.length buckets
 
       onFound' value' dict i = insertWithIndex targetBucket hashCode' k value' (getDRef ht) dict i
@@ -578,7 +580,7 @@ unionWithKey f t1 t2 = do
         k <- key dictS !~ i
         v <- value dictS !~ i
         let
-           hashCode' = hash k .&. 0x7FFFFFFFFFFFFFFF
+           hashCode' = hash k .&. mask
            targetBucket = hashCode' `rem` A.length (buckets dictG)
 
            onFound dict i = do
