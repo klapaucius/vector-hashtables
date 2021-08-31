@@ -1,3 +1,9 @@
+{-|
+Module      : Data.Vector.Hashtables.Internal
+Description : Provides internals of hashtables and set of utilities.
+Copyright   : (c) klapaucius, 2016-2021
+License     : BSD3
+-}
 {-# LANGUAGE BangPatterns     #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards  #-}
@@ -27,29 +33,39 @@ import qualified Data.Primitive.PrimArray.Utils as A
 
 import           Data.Vector.Hashtables.Internal.Mask (mask)
 
+-- | Alias for 'MutablePrimArray s Int'.
 type IntArray s = A.MutablePrimArray s Int
 
+-- | Single-element mutable array of 'Dictionary_' with primitive state token parameterized with state, keys and values types.
+--
+-- *Example*:
+--
+-- >>> import qualified Data.Vector.Storable.Mutable as VM
+-- >>> import qualified Data.Vector.Unboxed.Mutable  as UM
+-- >>> import Data.Vector.Hashtables
+-- >>> type HashTable k v = Dictionary (PrimState IO) VM.MVector k UM.MVector v
+--
+-- Different vectors could be used for keys and values:
+--
+-- - storable,
+-- - mutable,
+-- - unboxed.
+--
+-- In most cases unboxed vectors should be used. Nevertheless, it is up to you to decide about final form of hastable.
 newtype Dictionary s ks k vs v = DRef { getDRef :: MutVar s (Dictionary_ s ks k vs v) }
 
-data FrozenDictionary ks k vs v = FrozenDictionary {
-    fhashCode,
-    fnext,
-    fbuckets :: A.PrimArray Int,
-    count, freeList, freeCount :: Int,
-    fkey :: ks k,
-    fvalue :: vs v
-} deriving (Eq, Ord, Show)
-
-findElem :: (Vector ks k, Vector vs v, Hashable k, Eq k)
-         => FrozenDictionary ks k vs v -> k -> Int
-findElem FrozenDictionary{..} key' = go $ fbuckets !. (hashCode' `rem` A.sizeofPrimArray fbuckets) where
-    hashCode' = hash key' .&. mask
-    go i | i >= 0 =
-            if fhashCode !. i == hashCode' && fkey !.~ i == key'
-                then i else go $ fnext !. i
-         | otherwise = -1
-{-# INLINE findElem #-}
-
+-- | Represents collection of hashtable internal primitive arrays and vectors.
+--
+-- - hash codes,
+--
+-- - references to the next element,
+--
+-- - buckets,
+--
+-- - keys
+--
+-- - and values.
+--
 data Dictionary_ s ks k vs v = Dictionary {
     hashCode,
     next,
@@ -64,24 +80,55 @@ getCount = 0
 getFreeList = 1
 getFreeCount = 2
 
+-- | Represents immutable dictionary as collection of immutable arrays and vectors.
+-- See 'unsafeFreeze' and 'unsafeThaw' for conversions from/to mutable dictionary.
+data FrozenDictionary ks k vs v = FrozenDictionary {
+    fhashCode,
+    fnext,
+    fbuckets :: A.PrimArray Int,
+    count, freeList, freeCount :: Int,
+    fkey :: ks k,
+    fvalue :: vs v
+} deriving (Eq, Ord, Show)
+
+-- | /O(1)/ in the best case, /O(n)/ in the worst case.
+-- Find dictionary entry by given key in immutable 'FrozenDictionary'.
+-- If entry not found @-1@ returned.
+findElem :: (Vector ks k, Vector vs v, Hashable k, Eq k)
+         => FrozenDictionary ks k vs v -> k -> Int
+findElem FrozenDictionary{..} key' = go $ fbuckets !. (hashCode' `rem` A.sizeofPrimArray fbuckets) where
+    hashCode' = hash key' .&. mask
+    go i | i >= 0 =
+            if fhashCode !. i == hashCode' && fkey !.~ i == key'
+                then i else go $ fnext !. i
+         | otherwise = -1
+{-# INLINE findElem #-}
+
+-- | Infix version of @unsafeRead@.
 (!~) :: (MVector v a, PrimMonad m) => v (PrimState m) a -> Int -> m a
 (!~) = V.unsafeRead
 
+-- | Infix version of @unsafeIndex@.
 (!.~) :: (Vector v a) => v a -> Int -> a
 (!.~) = VI.unsafeIndex
 
+-- | Infix version of @unsafeWrite@.
 (<~~) :: (MVector v a, PrimMonad m) => v (PrimState m) a -> Int -> a -> m ()
 (<~~) = V.unsafeWrite
 
+-- | Infix version of @readPrimArray@.
 (!) :: PrimMonad m => A.MutablePrimArray (PrimState m) Int -> Int -> m Int
 (!) = A.readPrimArray 
 
+-- | Infix version of @indexPrimArray@.
 (!.) :: A.PrimArray Int -> Int -> Int
 (!.) = A.indexPrimArray
 
+-- | Infix version of @writePrimArray@.
 (<~) :: PrimMonad m => A.MutablePrimArray (PrimState m) Int -> Int -> Int -> m ()
 (<~) = A.writePrimArray
 
+-- | /O(1)/ Dictionary with given capacity.
 initialize
     :: (MVector ks k, MVector vs v, PrimMonad m)
     => Int
@@ -98,6 +145,7 @@ initialize capacity = do
     dr       <- newMutVar Dictionary {..}
     return . DRef $ dr
 
+-- | Create a copy of mutable dictionary.
 clone
     :: (MVector ks k, MVector vs v, PrimMonad m)
     => Dictionary (PrimState m) ks k vs v
@@ -113,7 +161,8 @@ clone DRef {..} = do
     dr              <- newMutVar Dictionary {..}
     return . DRef $ dr
 
-
+-- | /O(1)/ Unsafe convert a mutable dictionary to an immutable one without copying.
+-- The mutable dictionary may not be used after this operation.
 unsafeFreeze
     :: (VI.Vector ks k, VI.Vector vs v, PrimMonad m)
     => Dictionary (PrimState m) (Mutable ks) k (Mutable vs) v
@@ -130,7 +179,8 @@ unsafeFreeze DRef {..} = do
     fvalue          <- VI.unsafeFreeze value
     return FrozenDictionary {..}
 
-
+-- | /O(1)/ Unsafely convert immutable 'FrozenDictionary' to a mutable 'Dictionary' without copying.
+-- The immutable dictionary may not be used after this operation.
 unsafeThaw
     :: (Vector ks k, Vector vs v, PrimMonad m)
     => FrozenDictionary ks k vs v
@@ -145,16 +195,7 @@ unsafeThaw FrozenDictionary {..} = do
     dr       <- newMutVar Dictionary {..}
     return . DRef $ dr
 
-
-values :: (Vector vs v, PrimMonad m)
-       => Dictionary (PrimState m) ks k (Mutable vs) v -> m (vs v)
-values DRef{..} = do
-    Dictionary{..} <- readMutVar getDRef
-    hcs <- A.freeze hashCode
-    vs <- VI.freeze value
-    count <- refs ! getCount
-    return . VI.ifilter (\i _ -> hcs !. i >= 0) . VI.take count $ vs
-
+-- | /O(n)/ Retrieve list of keys from 'Dictionary'.
 keys :: (Vector ks k, PrimMonad m)
      => Dictionary (PrimState m) (Mutable ks) k vs v -> m (ks k)
 keys DRef{..} = do
@@ -164,6 +205,18 @@ keys DRef{..} = do
     count <- refs ! getCount
     return . VI.ifilter (\i _ -> hcs !. i >= 0) . VI.take count $ ks
 
+-- | /O(n)/ Retrieve list of values from 'Dictionary'.
+values :: (Vector vs v, PrimMonad m)
+       => Dictionary (PrimState m) ks k (Mutable vs) v -> m (vs v)
+values DRef{..} = do
+    Dictionary{..} <- readMutVar getDRef
+    hcs <- A.freeze hashCode
+    vs <- VI.freeze value
+    count <- refs ! getCount
+    return . VI.ifilter (\i _ -> hcs !. i >= 0) . VI.take count $ vs
+
+-- | /O(1)/ in the best case, /O(n)/ in the worst case.
+-- Find value by given key in 'Dictionary'. Throws an error if value not found.
 at :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
    => Dictionary (PrimState m) ks k vs v -> k -> m v
 at d k = do
@@ -175,6 +228,8 @@ at d k = do
         else error "KeyNotFoundException!"
 {-# INLINE at #-}
 
+-- | /O(1)/ in the best case, /O(n)/ in the worst case.
+-- Find value by given key in 'Dictionary'. Like 'at'' but return 'Nothing' if value not found.
 at' :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
     => Dictionary (PrimState m) ks k vs v -> k -> m (Maybe v)
 at' d k = do
@@ -199,6 +254,8 @@ atWithOrElse d k onFound onNothing = do
       else onNothing d
 {-# INLINE atWithOrElse #-}
 
+-- | /O(1)/ in the best case, /O(n)/ in the worst case.
+-- Find dictionary entry by given key. If entry not found @-1@ returned.
 findEntry :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
           => Dictionary (PrimState m) ks k vs v -> k -> m Int
 findEntry d key' = do
@@ -217,6 +274,9 @@ findEntry d key' = do
     go =<< buckets ! (hashCode' `rem` A.length buckets)
 {-# INLINE findEntry #-}
 
+-- | /O(1)/ in the best case, /O(n)/ in the worst case.
+-- Insert key and value in dictionary by key's hash.
+-- If entry with given key found value will be replaced.
 insert :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
        => Dictionary (PrimState m) ks k vs v -> k -> v -> m ()
 insert DRef{..} key' value' = do
@@ -360,6 +420,8 @@ instance DeleteEntry U.MVector where
 instance DeleteEntry B.MVector where
     deleteEntry v i = v <~~ i $ undefined
 
+-- | /O(1)/ in the best case, /O(n)/ in the worst case.
+-- Delete entry from 'Dictionary' by given key.
 delete :: (Eq k, MVector ks k, MVector vs v, Hashable k, PrimMonad m, DeleteEntry ks, DeleteEntry vs)
        => Dictionary (PrimState m) ks k vs v -> k -> m ()
 delete DRef{..} key' = do
@@ -410,16 +472,23 @@ deleteWithIndex !bucket !hashCode' d@Dictionary{..} key' !last !i
   | otherwise = return ()
 {-# INLINE deleteWithIndex #-}
 
+-- | /O(1)/ in the best case, /O(n)/ in the worst case.
+-- Find value by given key in 'Dictionary'. Like 'lookup'' but return 'Nothing' if value not found.
 lookup :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
    => Dictionary (PrimState m) ks k vs v -> k -> m (Maybe v)
 lookup = at'
 {-# INLINE lookup #-}
 
+-- | /O(1)/ in the best case, /O(n)/ in the worst case.
+-- Find value by given key in 'Dictionary'. Throws an error if value not found.
 lookup' :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
    => Dictionary (PrimState m) ks k vs v -> k -> m v
 lookup' = at
 {-# INLINE lookup' #-}
 
+-- | /O(1)/ in the best case, /O(n)/ in the worst case.
+-- Lookup the index of a key, which is its zero-based index in the sequence sorted by keys.
+-- The index is a number from 0 up to, but not including, the size of the dictionary.
 lookupIndex :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
    => Dictionary (PrimState m) ks k vs v -> k -> m (Maybe Int)
 lookupIndex ht k = do
@@ -428,12 +497,14 @@ lookupIndex ht k = do
     return . safeIndex =<< findEntry ht k
 {-# INLINE lookupIndex #-}
 
+-- | /O(1)/ Return 'True' if dictionary is empty, 'False' otherwise.
 null
   :: (MVector ks k, PrimMonad m)
   => Dictionary (PrimState m) ks k vs v -> m Bool
 null ht = return . (== 0) =<< length ht
 {-# INLINE null #-}
 
+-- | /O(1)/ Return the number of non-empty entries of dictionary.
 length
   :: (MVector ks k, PrimMonad m)
   => Dictionary (PrimState m) ks k vs v -> m Int
@@ -444,24 +515,57 @@ length DRef {..} = do
     return (count - freeCount)
 {-# INLINE length #-}
 
+-- | /O(1)/ Return the number of non-empty entries of dictionary. Synonym of 'length'.
 size
   :: (MVector ks k, PrimMonad m)
   => Dictionary (PrimState m) ks k vs v -> m Int
 size = length
 {-# INLINE size #-}
 
+-- | /O(1)/ in the best case, /O(n)/ in the worst case.
+-- Return 'True' if the specified key is present in the dictionary, 'False' otherwise.
 member
   :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
   => Dictionary (PrimState m) ks k vs v -> k -> m Bool
 member ht k = return . (>= 0) =<< findEntry ht k
 {-# INLINE member #-}
 
+-- | /O(1)/ in the best case, /O(n)/ in the worst case.
+-- The expression @'findWithDefault' ht def k@ returns
+-- the value at key @k@ or returns default value @def@
+-- when the key is not in the dictionary.
 findWithDefault
   :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
   => Dictionary (PrimState m) ks k vs v -> v -> k -> m v
 findWithDefault ht v k = return . fromMaybe v =<< at' ht k
 {-# INLINE findWithDefault #-}
 
+-- | /O(1)/ in the best case, /O(n)/ in the worst case.
+-- The expression (@'alter' ht f k@) alters the value @x@ at @k@, or absence thereof.
+-- 'alter' can be used to insert, delete, or update a value in a 'Dictionary'.
+--
+-- > let f _ = Nothing
+-- > ht <- fromList [(5,"a"), (3,"b")]
+-- > alter ht f 7
+-- > toList ht
+-- > [(3, "b"), (5, "a")]
+--
+-- > ht <- fromList [(5,"a"), (3,"b")]
+-- > alter ht f 5
+-- > toList ht
+-- > [(3 "b")]
+-- 
+-- > let f _ = Just "c"
+-- > ht <- fromList [(5,"a"), (3,"b")]
+-- > alter ht f 7
+-- > toList ht
+-- > [(3, "b"), (5, "a"), (7, "c")]
+-- 
+-- > ht <- fromList [(5,"a"), (3,"b")]
+-- > alter ht f 5
+-- > toList ht
+-- > [(3, "b"), (5, "c")]
+-- 
 alter
   :: ( MVector ks k, MVector vs v, DeleteEntry ks, DeleteEntry vs
      , PrimMonad m, Hashable k, Eq k
@@ -493,6 +597,9 @@ alter ht f k = do
 
 {-# INLINE alter #-}
 
+-- | /O(1)/ in the best case, /O(n)/ in the worst case.
+-- The expression (@'alterM' ht f k@) alters the value @x@ at @k@, or absence thereof.
+-- 'alterM' can be used to insert, delete, or update a value in a 'Dictionary' in the same @'PrimMonad' m@.
 alterM
   :: ( MVector ks k, MVector vs v, DeleteEntry ks, DeleteEntry vs
      , PrimMonad m, Hashable k, Eq k
@@ -528,7 +635,8 @@ alterM ht f k = do
 
 -- * Combine
 
--- | The union of two maps.
+-- | /O(min n m)/ in the best case, /O(min n m * max n m)/ in the worst case.
+-- The union of two maps.
 -- If a key occurs in both maps,
 -- the mapping from the first will be the mapping in the result.
 union
@@ -540,7 +648,8 @@ union = unionWith const
 
 {-# INLINE union #-}
 
--- | The union of two maps.
+-- | /O(min n m)/ in the best case, /O(min n m * max n m)/ in the worst case.
+-- The union of two maps.
 -- The provided function (first argument) will be used to compute the result.
 unionWith
   :: (MVector ks k, MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
@@ -552,7 +661,8 @@ unionWith f = unionWithKey (const f)
 
 {-# INLINE unionWith #-}
 
--- | The union of two maps.
+-- | /O(min n m)/ in the best case, /O(min n m * max n m)/ in the worst case.
+-- The union of two maps.
 -- If a key occurs in both maps,
 -- the provided function (first argument) will be used to compute the result.
 unionWithKey
@@ -601,7 +711,8 @@ unionWithKey f t1 t2 = do
 
 -- * Difference and intersection
 
--- | Difference of two tables. Return elements of the first table
+-- | /O(n)/ in the best case, /O(n * m)/ in the worst case.
+-- Difference of two tables. Return elements of the first table
 -- not existing in the second.
 difference
   :: (MVector ks k, MVector vs v, MVector vs w, PrimMonad m, Hashable k, Eq k)
@@ -621,7 +732,8 @@ difference a b = do
         _       -> return ()
 {-# INLINE difference #-}
 
--- | Difference with a combining function. When two equal keys are
+-- | /O(n)/ in the best case, /O(n * m)/ in the worst case.
+-- Difference with a combining function. When two equal keys are
 -- encountered, the combining function is applied to the values of these keys.
 -- If it returns 'Nothing', the element is discarded (proper set difference). If
 -- it returns (@'Just' y@), the element is updated with a new value @y@.
@@ -644,7 +756,8 @@ differenceWith f a b = do
         Just w  -> maybe (return ()) (insert ht k) (f v w)
 {-# INLINE differenceWith #-}
 
--- | Intersection of two maps. Return elements of the first
+-- | /O(n)/ in the best case, /O(n * m)/ in the worst case.
+-- Intersection of two maps. Return elements of the first
 -- map for keys existing in the second.
 intersection
   :: (MVector ks k, MVector vs v, MVector vs w, PrimMonad m, Hashable k, Eq k)
@@ -710,6 +823,7 @@ intersectionWithKey f a b = do
 
 -- * List conversions
 
+-- | /O(n)/ Convert list to a 'Dictionary'. 
 fromList
   :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
   => [(k, v)] -> m (Dictionary (PrimState m) ks k vs v)
@@ -720,6 +834,7 @@ fromList kv = do
 
 {-# INLINE fromList #-}
 
+-- | /O(n)/ Convert 'Dictionary' to a list.
 toList
   :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
   => (Dictionary (PrimState m) ks k vs v) -> m [(k, v)]

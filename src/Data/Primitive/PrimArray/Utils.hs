@@ -1,3 +1,9 @@
+{-|
+Module      : Data.Primitive.PrimArray.Utils
+Description : Provides useful utilities for operating with mutable primitive arrays.
+Copyright   : (c) klapaucius, 2016-2021
+License     : BSD3
+-}
 module Data.Primitive.PrimArray.Utils where
 
 import Data.Primitive.PrimArray

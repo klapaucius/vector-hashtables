@@ -7,7 +7,7 @@ license:             BSD3
 license-file:        LICENSE
 author:              klapaucius
 maintainer:          example@example.com
-copyright:           2016 klapaucius
+copyright:           2016-2021 klapaucius
 category:            Web
 build-type:          Simple
 extra-source-files:  README.md,
@@ -20,7 +20,8 @@ library
     hs-source-dirs:    src, src-i386
   else
     hs-source-dirs:    src, src-gen
-  exposed-modules:     Data.Vector.Hashtables.Internal,
+  exposed-modules:     Data.Vector.Hashtables,
+                       Data.Vector.Hashtables.Internal,
                        Data.Vector.Hashtables.Internal.Mask,
                        Data.Primitive.PrimArray.Utils
   ghc-options:         -O2
