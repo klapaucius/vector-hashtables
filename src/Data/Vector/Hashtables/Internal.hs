@@ -1,7 +1,7 @@
 {-|
 Module      : Data.Vector.Hashtables.Internal
 Description : Provides internals of hashtables and set of utilities.
-Copyright   : (c) klapaucius, 2016-2021
+Copyright   : (c) klapaucius, swamp_agr, 2016-2021
 License     : BSD3
 -}
 {-# LANGUAGE BangPatterns     #-}

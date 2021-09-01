@@ -6,8 +6,8 @@ homepage:            https://github.com/githubuser/vector-hashtables#readme
 license:             BSD3
 license-file:        LICENSE
 author:              klapaucius
-maintainer:          example@example.com
-copyright:           2016-2021 klapaucius
+maintainer:          klapaucius, swamp_agr
+copyright:           2016-2021 klapaucius, swamp_agr
 category:            Web
 build-type:          Simple
 extra-source-files:  README.md,

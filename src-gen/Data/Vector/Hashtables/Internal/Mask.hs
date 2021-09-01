@@ -1,7 +1,7 @@
 {-|
 Module      : Data.Vector.Hashtables.Internal.Mask
 Description : Provides arch-dependent mask for hashtables.
-Copyright   : (c) klapaucius, 2016-2021
+Copyright   : (c) klapaucius, swamp_agr, 2016-2021
 License     : BSD3
 -}
 module Data.Vector.Hashtables.Internal.Mask where
