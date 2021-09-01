@@ -1,7 +1,7 @@
 {-|
 Module      : Data.Vector.Hashtables
 Description : Provides hashtables, basic interface and set of utilities.
-Copyright   : (c) klapaucius, 2016-2021
+Copyright   : (c) klapaucius, swamp_agr, 2016-2021
 License     : BSD3
 -}
 module Data.Vector.Hashtables
@@ -68,8 +68,11 @@ import Data.Vector.Hashtables.Internal
 
 -- $doc
 --
--- This package provides hashtable implementation similar to .NET. It was originated as response to <https://comp.lang.functional.narkive.com/uYVjkKfl/f-vs-ocaml-vs-python-vs-haskell-hash-table-performance#post5>.
+-- - This package provides hashtable implementation similar to .NET Generic Dictionary implementation (at the time of 2015) <https://github.com/dotnet/coreclr/blob/3a0d638843472056c0cbb723beaed0b1152ca36d/src/mscorlib/src/System/Collections/Generic/Dictionary.cs>.
 -- 
+-- - It was originated as response to <https://comp.lang.functional.narkive.com/uYVjkKfl/f-vs-ocaml-vs-python-vs-haskell-hash-table-performance#post5>.
+--
+-- - For more hashtables implementations see <https://rcoh.me/posts/hash-map-analysis/>.
 
 -- $usage
 --
