@@ -8,7 +8,7 @@ license-file:        LICENSE
 author:              klapaucius
 maintainer:          klapaucius, swamp_agr
 copyright:           2016-2021 klapaucius, swamp_agr
-category:            Web
+category:            Data
 build-type:          Simple
 extra-source-files:  README.md,
                      src-i386/Data/Vector/Hashtables/Internal/Mask.hs,
