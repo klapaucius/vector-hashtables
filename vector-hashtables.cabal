@@ -6,9 +6,9 @@ homepage:            https://github.com/githubuser/vector-hashtables#readme
 license:             BSD3
 license-file:        LICENSE
 author:              klapaucius
-maintainer:          example@example.com
-copyright:           2016 klapaucius
-category:            Web
+maintainer:          klapaucius, swamp_agr
+copyright:           2016-2021 klapaucius, swamp_agr
+category:            Data
 build-type:          Simple
 extra-source-files:  README.md,
                      src-i386/Data/Vector/Hashtables/Internal/Mask.hs,
@@ -20,7 +20,8 @@ library
     hs-source-dirs:    src, src-i386
   else
     hs-source-dirs:    src, src-gen
-  exposed-modules:     Data.Vector.Hashtables.Internal,
+  exposed-modules:     Data.Vector.Hashtables,
+                       Data.Vector.Hashtables.Internal,
                        Data.Vector.Hashtables.Internal.Mask,
                        Data.Primitive.PrimArray.Utils
   ghc-options:         -O2
