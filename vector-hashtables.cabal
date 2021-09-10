@@ -1,5 +1,5 @@
 name:                vector-hashtables
-version:             0.1.1.0
+version:             0.1.1.1
 synopsis:            Efficient vector-based mutable hashtables implementation.
 description:
   This package provides efficient vector-based hashtable implementation similar to .NET Generic Dictionary implementation (at the time of 2015).
