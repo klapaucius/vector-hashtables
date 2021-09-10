@@ -328,17 +328,18 @@ insert DRef{..} key' value' = do
 insertWithIndex
   :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
   => Int -> Int -> k -> v -> MutVar (PrimState m) (Dictionary_ (PrimState m) ks k vs v) -> Dictionary_ (PrimState m) ks k vs v -> Int -> m ()
-insertWithIndex !targetBucket !hashCode' key' value' getDRef d@Dictionary{..} i
-      | i >= 0 = do
-           hc <- hashCode ! i
-           if hc == hashCode'
-               then do
-                   k  <- key !~ i
-                   if k == key'
-                       then value <~~ i $ value'
-                       else insertWithIndex targetBucket hashCode' key' value' getDRef d =<< next ! i
-               else insertWithIndex targetBucket hashCode' key' value' getDRef d =<< next ! i
-      | otherwise = addOrResize targetBucket hashCode' key' value' getDRef d
+insertWithIndex !targetBucket !hashCode' key' value' getDRef d@Dictionary{..} = go where
+  go i
+    | i >= 0 = do
+         hc <- hashCode ! i
+         if hc == hashCode'
+             then do
+                 k  <- key !~ i
+                 if k == key'
+                     then value <~~ i $ value'
+                     else go =<< next ! i
+             else go =<< next ! i
+    | otherwise = addOrResize targetBucket hashCode' key' value' getDRef d
 {-# INLINE insertWithIndex #-}
 
 addOrResize
