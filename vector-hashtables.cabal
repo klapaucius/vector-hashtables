@@ -65,12 +65,12 @@ test-suite vector-hashtables-test
 
   -- Additional dependencies
   build-depends:
-      hspec                >= 2.6.0    && < 2.8
+      hspec                >= 2.6.0    && < 2.11
     , QuickCheck           >= 2.12.6.1 && < 2.15
     , quickcheck-instances >= 0.3.19   && < 0.4
 
   build-tool-depends:
-    hspec-discover:hspec-discover >= 2.6.0 && < 2.8
+    hspec-discover:hspec-discover >= 2.6.0 && < 2.11
 
 source-repository head
   type:     git
