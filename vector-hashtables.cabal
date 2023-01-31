@@ -1,5 +1,5 @@
 name:                vector-hashtables
-version:             0.1.1.1
+version:             0.1.1.2
 synopsis:            Efficient vector-based mutable hashtables implementation.
 description:
   This package provides efficient vector-based hashtable implementation similar to .NET Generic Dictionary implementation (at the time of 2015).
@@ -9,8 +9,8 @@ homepage:            https://github.com/klapaucius/vector-hashtables#readme
 license:             BSD3
 license-file:        LICENSE
 author:              klapaucius
-maintainer:          klapaucius, swamp_agr
-copyright:           2016-2021 klapaucius, swamp_agr
+maintainer:          klapaucius, swamp_agr, ArtemPelenitsyn
+copyright:           2016-2023 klapaucius, swamp_agr
 category:            Data
 build-type:          Simple
 extra-source-files:  README.md,

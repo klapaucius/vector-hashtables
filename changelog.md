@@ -1,3 +1,8 @@
+# 0.1.1.2 (2023-01-31)
+
+- Relax `hspec` boundaries (see [#14](https://github.com/klapaucius/vector-hashtables/pull/14)).
+- Set lower bound for `primtive` (see [#12](https://github.com/klapaucius/vector-hashtables/pull/12)).
+
 # 0.1.1.1 (2021-09-10)
 
 - Optimise `insertWithIndex` function ([#10](https://github.com/klapaucius/vector-hashtables/pull/10)).
