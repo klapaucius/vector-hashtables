@@ -1,5 +1,9 @@
 # vector-hashtables
 
+
+[![Hackage](https://img.shields.io/hackage/v/vector-hashtables.svg)](https://hackage.haskell.org/package/vector-hashtables)
+[![Build Status](https://github.com/klapaucius/vector-hashtables/workflows/haskell-ci/badge.svg)](https://github.com/klapaucius/vector-hashtables/actions?query=workflow%3Ahaskell-ci)
+
 ```
 benchmarking Comparison/1000/insert/hashtables basic
 time                 38.91 μs   (38.65 μs .. 39.23 μs)
