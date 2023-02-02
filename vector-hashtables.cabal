@@ -1,3 +1,4 @@
+cabal-version:       2.0
 name:                vector-hashtables
 version:             0.1.1.2
 synopsis:            Efficient vector-based mutable hashtables implementation.
@@ -13,11 +14,17 @@ maintainer:          klapaucius, swamp_agr, ArtemPelenitsyn
 copyright:           2016-2023 klapaucius, swamp_agr
 category:            Data
 build-type:          Simple
-extra-source-files:  README.md,
-                     src-i386/Data/Vector/Hashtables/Internal/Mask.hs,
-                     src-gen/Data/Vector/Hashtables/Internal/Mask.hs,
+extra-doc-files:     README.md,
                      changelog.md
-cabal-version:       >=1.10
+extra-source-files:  src-i386/Data/Vector/Hashtables/Internal/Mask.hs,
+                     src-gen/Data/Vector/Hashtables/Internal/Mask.hs
+tested-with:
+    GHC == 9.4.4
+    GHC == 9.2.5
+    GHC == 9.0.2
+    GHC == 8.10.7
+    GHC == 8.8.4
+    GHC == 8.6.5
 
 library
   if arch(i386)
