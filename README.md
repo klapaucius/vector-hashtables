@@ -2,7 +2,7 @@
 
 
 [![Hackage](https://img.shields.io/hackage/v/vector-hashtables.svg)](https://hackage.haskell.org/package/vector-hashtables)
-[![Build Status](https://github.com/klapaucius/vector-hashtables/workflows/haskell-ci/badge.svg)](https://github.com/klapaucius/vector-hashtables/actions?query=workflow%3Ahaskell-ci)
+[![Build Status](https://github.com/klapaucius/vector-hashtables/workflows/Haskell-CI/badge.svg)](https://github.com/klapaucius/vector-hashtables/actions?query=workflow%3Ahaskell-ci)
 
 ```
 benchmarking Comparison/1000/insert/hashtables basic
