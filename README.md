@@ -6,6 +6,12 @@
 [![Stackage LTS Version](https://www.stackage.org/package/vector-hashtables/badge/lts?label=Stackage/LTS)](https://www.stackage.org/package/vector-hashtables)  
 [![Build Status](https://github.com/klapaucius/vector-hashtables/workflows/Haskell-CI/badge.svg)](https://github.com/klapaucius/vector-hashtables/actions?query=workflow%3Ahaskell-ci)
 
+A brief history of this library is given in [this blog post](https://an-pro.org/posts/12-vector-hashtables.html).
+
+## Benchmarks vs `hashtables`
+
+(and `vector` where relevant)
+
 ```
 benchmarking Comparison/1000/insert/hashtables basic
 time                 38.91 μs   (38.65 μs .. 39.23 μs)
