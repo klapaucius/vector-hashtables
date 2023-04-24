@@ -1,3 +1,11 @@
+# 0.1.1.3 (2023-04-23)
+
+* cleanup the cabal file
+* CI based on Haskell-CI (see [#15](https://github.com/klapaucius/vector-hashtables/pull/15))
+* readme: minimal improvement of benchmark data presentation (see [#16](https://github.com/klapaucius/vector-hashtables/pull/16))
+* bump hspec to <2.12 (see [#17](https://github.com/klapaucius/vector-hashtables/pull/17))
+
+
 # 0.1.1.2 (2023-01-31)
 
 - Relax `hspec` boundaries (see [#14](https://github.com/klapaucius/vector-hashtables/pull/14)).

@@ -1,6 +1,6 @@
 cabal-version:       2.0
 name:                vector-hashtables
-version:             0.1.1.2
+version:             0.1.1.3
 synopsis:            Efficient vector-based mutable hashtables implementation.
 description:
   This package provides efficient vector-based hashtable implementation similar to .NET Generic Dictionary implementation (at the time of 2015).
