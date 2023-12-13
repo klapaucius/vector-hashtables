@@ -1,3 +1,7 @@
+# 0.1.1.4 (2023-12-13)
+
+* Add `wasm32` support (see [#20](https://github.com/klapaucius/vector-hashtables/pull/20)).
+
 # 0.1.1.3 (2023-04-23)
 
 * cleanup the cabal file
