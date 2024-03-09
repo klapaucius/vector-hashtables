@@ -31,6 +31,7 @@ module Data.Vector.Hashtables
     , lookup'
     , insert
     , delete
+    , upsert
     , alter
     , alterM
 

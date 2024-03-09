@@ -117,6 +117,8 @@ class HashTableTest ks vs where
 
   testAlter :: VH.Dictionary (PrimState IO) ks Int vs Int -> (Maybe Int -> Maybe Int) -> Int -> IO ()
 
+  testUpsert :: VH.Dictionary (PrimState IO) ks Int vs Int -> (Maybe Int -> Int) -> Int -> IO ()
+
   testUnion
     :: VH.Dictionary (PrimState IO) ks Int vs Int
     -> VH.Dictionary (PrimState IO) ks Int vs Int
@@ -177,6 +179,11 @@ mkSpec ksp vsp = describe (specDescription ksp vsp) $
       it "when altering is nothing - key deleted from table" $ property prop_alterDelete
 
       it "when altering is just a result - key updated with result" $ property prop_alterUpdate
+
+      it "when upserting a new key - key is set to value" $ property prop_upsertInsert
+
+      it "when upserting an existing key - key updated with result" $ property prop_upsertUpdate
+
       it "intersection + symmetric difference of two tables is equal to union of two tables" $ property prop_union
 
   where
@@ -302,6 +309,21 @@ mkSpec ksp vsp = describe (specDescription ksp vsp) $
       v <- testAt ht x
       v `shouldBe` (negate y)
 
+    prop_upsertInsert :: HashTableTest ks vs => (Int, Int) -> IO ()
+    prop_upsertInsert (x, y) = do
+      ht <- testInit (Proxy @ks) (Proxy @vs) 10
+      testUpsert ht (maybe 0 negate) x
+      v <- testAt ht x
+      v `shouldBe` 0
+
+    prop_upsertUpdate :: HashTableTest ks vs => (Int, Int) -> IO ()
+    prop_upsertUpdate (x, y) = do
+      ht <- testInit (Proxy @ks) (Proxy @vs) 10
+      testInsert ht x y
+      testUpsert ht (maybe 0 negate) x
+      v <- testAt ht x
+      v `shouldBe` (negate y)
+
     prop_union :: Positive Int -> Property
     prop_union (Positive n) = forAll (twoListsN n) $ \(xs, ys) -> do
       ht1 <- testFromList (Proxy @ks) (Proxy @vs) xs
@@ -337,6 +359,7 @@ instance HashTableTest M.MVector M.MVector where
   testNull = VH.null
   testMember = VH.member
   testAlter = VH.alter
+  testUpsert = VH.upsert
   testUnion = VH.union
   testDifference = VH.difference
   testIntersection = VH.intersection
@@ -361,6 +384,7 @@ instance HashTableTest SM.MVector SM.MVector where
   testNull = VH.null
   testMember = VH.member
   testAlter = VH.alter
+  testUpsert = VH.upsert
   testUnion = VH.union
   testDifference = VH.difference
   testIntersection = VH.intersection
@@ -385,6 +409,7 @@ instance HashTableTest SM.MVector M.MVector where
   testNull = VH.null
   testMember = VH.member
   testAlter = VH.alter
+  testUpsert = VH.upsert
   testUnion = VH.union
   testDifference = VH.difference
   testIntersection = VH.intersection
@@ -409,6 +434,7 @@ instance HashTableTest M.MVector UM.MVector where
   testNull = VH.null
   testMember = VH.member
   testAlter = VH.alter
+  testUpsert = VH.upsert
   testUnion = VH.union
   testDifference = VH.difference
   testIntersection = VH.intersection

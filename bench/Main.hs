@@ -241,6 +241,7 @@ utilities n = do
     hSize <- vh n
     hMember <- vh n
     hFindWithDefault <- vh n
+    hUpsert <- vh n
     hAlter <- vh n
     hAlterM <- vh n
     hUnion1 <- vh n
@@ -264,6 +265,7 @@ utilities n = do
         , bench "size" $ nfIO (bhusize hSize)
         , bench "member" $ nfIO (bhumember n hMember)
         , bench "findWithDefault" $ nfIO (bhufindWithDefault n hFindWithDefault)
+        , bench "upsert" $ nfIO (bhuupsert n hUpsert)
         , bench "alter" $ nfIO (bhualter n hAlter)
         , bench "alterM" $ nfIO (bhualterM n hAlterM)
         , bench "union" $ nfIO (bhuunion hUnion1 hUnion2)
@@ -315,6 +317,11 @@ bhumember n ht = do
 
 bhufindWithDefault n ht = do
     let go !i | i <= n = VH.findWithDefault ht 0 i >> go (i + 1)
+              | otherwise = return ()
+    go 0
+
+bhuupsert n ht = do
+    let go !i | i <= n = VH.upsert ht (maybe minBound succ) i >> go (i + 1)
               | otherwise = return ()
     go 0
 
