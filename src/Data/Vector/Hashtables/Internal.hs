@@ -542,6 +542,46 @@ findWithDefault ht v k = return . fromMaybe v =<< at' ht k
 {-# INLINE findWithDefault #-}
 
 -- | /O(1)/ in the best case, /O(n)/ in the worst case.
+-- The expression (@'upsert' ht f k@) updates or inserts the value @x@ at @k@.
+--
+-- > let f _ = "c"
+-- > ht <- fromList [(5,"a"), (3,"b")]
+-- > upsert ht f 7
+-- > toList ht
+-- > [(3, "b"), (5, "a"), (7, "c")]
+--
+-- > ht <- fromList [(5,"a"), (3,"b")]
+-- > upsert ht f 5
+-- > toList ht
+-- > [(3, "b"), (5, "c")]
+--
+upsert
+  :: ( MVector ks k, MVector vs v
+     , PrimMonad m, Hashable k, Eq k
+     )
+  => Dictionary (PrimState m) ks k vs v -> (Maybe v -> v) -> k -> m ()
+upsert ht f k = do
+  d@Dictionary{..} <- readMutVar . getDRef $ ht
+  let
+      hashCode' = hash k .&. mask
+      targetBucket = hashCode' `rem` A.length buckets
+
+      onFound' value' dict i = insertWithIndex targetBucket hashCode' k value' (getDRef ht) dict i
+
+      onFound dict i = do
+        d'@Dictionary{..} <- readMutVar . getDRef $ dict
+        v <- value !~ i
+        onFound' (f (Just v)) d' i
+
+      onNothing dict = do
+        d' <- readMutVar . getDRef $ dict
+        onFound' (f Nothing) d' (-1)
+
+  void $ atWithOrElse ht k onFound onNothing
+
+{-# INLINE upsert #-}
+
+-- | /O(1)/ in the best case, /O(n)/ in the worst case.
 -- The expression (@'alter' ht f k@) alters the value @x@ at @k@, or absence thereof.
 -- 'alter' can be used to insert, delete, or update a value in a 'Dictionary'.
 --
