@@ -106,15 +106,20 @@ findElem FrozenDictionary{..} key' = go $ fbuckets !. (hashCode' `rem` A.sizeofP
 
 -- | Infix version of @unsafeRead@.
 (!~) :: (MVector v a, PrimMonad m) => v (PrimState m) a -> Int -> m a
-(!~) = V.unsafeRead
+(!~) xs !i = V.unsafeRead xs i
+-- Why do we need ! before i?
+-- The reason is that V.unsafeRead is essentially V.basicUnsafeRead,
+-- which is an opaque class member and, unless V.unsafeRead was
+-- already specialised to a specific v, GHC has no clue that i is most certainly
+-- to be used eagerly. Bang before i hints this vital for optimizer information.
 
 -- | Infix version of @unsafeIndex@.
 (!.~) :: (Vector v a) => v a -> Int -> a
-(!.~) = VI.unsafeIndex
+(!.~) xs !i = VI.unsafeIndex xs i
 
 -- | Infix version of @unsafeWrite@.
 (<~~) :: (MVector v a, PrimMonad m) => v (PrimState m) a -> Int -> a -> m ()
-(<~~) = V.unsafeWrite
+(<~~) xs !i x = V.unsafeWrite xs i x
 
 -- | Infix version of @readPrimArray@.
 (!) :: PrimMonad m => A.MutablePrimArray (PrimState m) Int -> Int -> m Int
