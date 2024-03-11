@@ -7,5 +7,5 @@ License     : BSD3
 module Data.Vector.Hashtables.Internal.Mask where
 
 -- | 'Int' mask. For 32-bit it is equal to @0x7FFFFFFF@. Otherwise, @0x7FFFFFFFFFFFFFFF@.
-mask = 0x7FFFFFFF :: Int
+mask = maxBound :: Int
 {-# INLINE mask #-}

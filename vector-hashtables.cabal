@@ -16,8 +16,6 @@ category:            Data
 build-type:          Simple
 extra-doc-files:     README.md,
                      changelog.md
-extra-source-files:  src-i386/Data/Vector/Hashtables/Internal/Mask.hs,
-                     src-gen/Data/Vector/Hashtables/Internal/Mask.hs
 tested-with:
     GHC == 9.8.1
     GHC == 9.6.3
@@ -29,10 +27,7 @@ tested-with:
     GHC == 8.6.5
 
 library
-  if arch(i386) || arch(wasm32)
-    hs-source-dirs:    src, src-i386
-  else
-    hs-source-dirs:    src, src-gen
+  hs-source-dirs:    src
   exposed-modules:     Data.Vector.Hashtables,
                        Data.Vector.Hashtables.Internal,
                        Data.Vector.Hashtables.Internal.Mask,
