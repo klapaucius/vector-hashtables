@@ -70,9 +70,9 @@ data Dictionary_ s ks k vs v = Dictionary {
     hashCode,
     next,
     buckets,
-    refs :: IntArray s,
-    key :: ks s k,
-    value :: vs s v
+    refs :: !(IntArray s),
+    key :: !(ks s k),
+    value :: !(vs s v)
 }
 
 getCount, getFreeList, getFreeCount :: Int
@@ -85,10 +85,10 @@ getFreeCount = 2
 data FrozenDictionary ks k vs v = FrozenDictionary {
     fhashCode,
     fnext,
-    fbuckets :: A.PrimArray Int,
-    count, freeList, freeCount :: Int,
-    fkey :: ks k,
-    fvalue :: vs v
+    fbuckets :: !(A.PrimArray Int),
+    count, freeList, freeCount :: !Int,
+    fkey :: !(ks k),
+    fvalue :: !(vs v)
 } deriving (Eq, Ord, Show)
 
 -- | /O(1)/ in the best case, /O(n)/ in the worst case.
