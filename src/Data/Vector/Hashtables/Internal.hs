@@ -70,9 +70,9 @@ data Dictionary_ s ks k vs v = Dictionary {
     hashCode,
     next,
     buckets,
-    refs :: IntArray s,
-    key :: ks s k,
-    value :: vs s v
+    refs :: !(IntArray s),
+    key :: !(ks s k),
+    value :: !(vs s v)
 }
 
 getCount, getFreeList, getFreeCount :: Int
@@ -85,10 +85,10 @@ getFreeCount = 2
 data FrozenDictionary ks k vs v = FrozenDictionary {
     fhashCode,
     fnext,
-    fbuckets :: A.PrimArray Int,
-    count, freeList, freeCount :: Int,
-    fkey :: ks k,
-    fvalue :: vs v
+    fbuckets :: !(A.PrimArray Int),
+    count, freeList, freeCount :: !Int,
+    fkey :: !(ks k),
+    fvalue :: !(vs v)
 } deriving (Eq, Ord, Show)
 
 -- | /O(1)/ in the best case, /O(n)/ in the worst case.
@@ -106,15 +106,20 @@ findElem FrozenDictionary{..} key' = go $ fbuckets !. (hashCode' `rem` A.sizeofP
 
 -- | Infix version of @unsafeRead@.
 (!~) :: (MVector v a, PrimMonad m) => v (PrimState m) a -> Int -> m a
-(!~) = V.unsafeRead
+(!~) xs !i = V.unsafeRead xs i
+-- Why do we need ! before i?
+-- The reason is that V.unsafeRead is essentially V.basicUnsafeRead,
+-- which is an opaque class member and, unless V.unsafeRead was
+-- already specialised to a specific v, GHC has no clue that i is most certainly
+-- to be used eagerly. Bang before i hints this vital for optimizer information.
 
 -- | Infix version of @unsafeIndex@.
 (!.~) :: (Vector v a) => v a -> Int -> a
-(!.~) = VI.unsafeIndex
+(!.~) xs !i = VI.unsafeIndex xs i
 
 -- | Infix version of @unsafeWrite@.
 (<~~) :: (MVector v a, PrimMonad m) => v (PrimState m) a -> Int -> a -> m ()
-(<~~) = V.unsafeWrite
+(<~~) xs !i x = V.unsafeWrite xs i x
 
 -- | Infix version of @readPrimArray@.
 (!) :: PrimMonad m => A.MutablePrimArray (PrimState m) Int -> Int -> m Int
