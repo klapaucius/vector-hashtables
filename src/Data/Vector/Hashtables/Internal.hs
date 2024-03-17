@@ -36,22 +36,23 @@ import           Data.Vector.Hashtables.Internal.Mask (mask)
 -- | Alias for 'MutablePrimArray s Int'.
 type IntArray s = A.MutablePrimArray s Int
 
--- | Single-element mutable array of 'Dictionary_' with primitive state token parameterized with state, keys and values types.
+-- | Single-element mutable array of 'Dictionary_' with primitive state token
+-- parameterized with state, keys and values types.
 --
--- *Example*:
+-- Different flavors of 'MVector' could be used for keys and values.
+-- It's preferable to use "Data.Vector.Unboxed.Mutable"
+-- or "Data.Vector.Storable.Mutable" if possible. Otherwise,
+-- if you must use boxed vectors, consider employing strict ones from
+-- [@strict-containers@](https://hackage.haskell.org/package/strict-containers)
+-- to eliminate potential accumulation of thunks.
+--
+-- ==== Example
 --
 -- >>> import qualified Data.Vector.Storable.Mutable as VM
 -- >>> import qualified Data.Vector.Unboxed.Mutable  as UM
 -- >>> import Data.Vector.Hashtables
 -- >>> type HashTable k v = Dictionary (PrimState IO) VM.MVector k UM.MVector v
 --
--- Different vectors could be used for keys and values:
---
--- - storable,
--- - mutable,
--- - unboxed.
---
--- In most cases unboxed vectors should be used. Nevertheless, it is up to you to decide about final form of hastable.
 newtype Dictionary s ks k vs v = DRef { getDRef :: MutVar s (Dictionary_ s ks k vs v) }
 
 -- | Represents collection of hashtable internal primitive arrays and vectors.
@@ -549,6 +550,12 @@ findWithDefault ht v k = return . fromMaybe v =<< at' ht k
 -- | /O(1)/ in the best case, /O(n)/ in the worst case.
 -- The expression (@'upsert' ht f k@) updates or inserts the value @x@ at @k@.
 --
+-- It's a responsibility of 'MVector' @vs@ to force evaluation of the updated value.
+-- Unboxed / storable vectors do it automatically. If you use boxed vectors,
+-- consider employing strict ones from
+-- [@strict-containers@](https://hackage.haskell.org/package/strict-containers)
+-- to eliminate potential accumulation of thunks.
+--
 -- > let f _ = "c"
 -- > ht <- fromList [(5,"a"), (3,"b")]
 -- > upsert ht f 7
@@ -589,6 +596,12 @@ upsert ht f k = do
 -- | /O(1)/ in the best case, /O(n)/ in the worst case.
 -- The expression (@'alter' ht f k@) alters the value @x@ at @k@, or absence thereof.
 -- 'alter' can be used to insert, delete, or update a value in a 'Dictionary'.
+--
+-- It's a responsibility of 'MVector' @vs@ to force evaluation of the updated value.
+-- Unboxed / storable vectors do it automatically. If you use boxed vectors,
+-- consider employing strict ones from
+-- [@strict-containers@](https://hackage.haskell.org/package/strict-containers)
+-- to eliminate potential accumulation of thunks.
 --
 -- > let f _ = Nothing
 -- > ht <- fromList [(5,"a"), (3,"b")]
