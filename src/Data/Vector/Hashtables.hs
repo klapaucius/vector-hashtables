@@ -16,7 +16,7 @@ module Data.Vector.Hashtables
     , FrozenDictionary (..)
     , findElem
     , Dictionary_ (..)
-    , findEntry
+    , findEntry_
 
     -- ** Construction
     , initialize
@@ -34,6 +34,7 @@ module Data.Vector.Hashtables
     , upsert
     , alter
     , alterM
+    , findEntry
 
     -- ** Combine
 

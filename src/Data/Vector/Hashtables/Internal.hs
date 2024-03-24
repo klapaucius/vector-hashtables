@@ -233,13 +233,7 @@ values DRef{..} = do
 -- Find value by given key in 'Dictionary'. Throws an error if value not found.
 at :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
    => Dictionary (PrimState m) ks k vs v -> k -> m v
-at d k = do
-    i <- findEntry d k
-    if i >= 0
-        then do
-            Dictionary{..} <- readMutVar . getDRef $ d
-            value !~ i
-        else error "KeyNotFoundException!"
+at d k = fromMaybe (error "KeyNotFoundException!") <$!> at' d k
 {-# INLINE at #-}
 
 -- | /O(1)/ in the best case, /O(n)/ in the worst case.
@@ -247,12 +241,11 @@ at d k = do
 at' :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
     => Dictionary (PrimState m) ks k vs v -> k -> m (Maybe v)
 at' d k = do
-  i <- findEntry d k
+  d_@Dictionary{..} <- readMutVar . getDRef $ d
+  i <- findEntry_ d_ k
   if i >= 0
-      then do
-          Dictionary{..} <- readMutVar . getDRef $ d
-          Just <$> value !~ i
-      else pure Nothing
+    then Just <$> value !~ i
+    else return Nothing
 {-# INLINE at' #-}
 
 atWithOrElse :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
@@ -273,7 +266,15 @@ atWithOrElse d k onFound onNothing = do
 findEntry :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
           => Dictionary (PrimState m) ks k vs v -> k -> m Int
 findEntry d key' = do
-    Dictionary{..} <- readMutVar . getDRef $ d
+    d_ <- readMutVar . getDRef $ d
+    findEntry_ d_ key'
+{-# INLINE findEntry #-}
+
+-- | /O(1)/ in the best case, /O(n)/ in the worst case.
+-- Same as 'findEntry', but for 'Dictionary_'.
+findEntry_ :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
+          => Dictionary_ (PrimState m) ks k vs v -> k -> m Int
+findEntry_ Dictionary{..} key' = do
     let hashCode' = hash key' .&. mask
         go i | i >= 0 = do
                 hc <- hashCode ! i
@@ -286,7 +287,7 @@ findEntry d key' = do
                     else go =<< next ! i
              | otherwise = return $ -1
     go =<< buckets ! (hashCode' `fastRem` remSize)
-{-# INLINE findEntry #-}
+{-# INLINE findEntry_ #-}
 
 -- | /O(1)/ in the best case, /O(n)/ in the worst case.
 -- Insert key and value in dictionary by key's hash.
