@@ -14,14 +14,17 @@ replicate :: (PrimMonad m, Prim a)
           => Int -> a -> m (MutablePrimArray (PrimState m) a)
 replicate n x = do
     xs <- newPrimArray n
-    setPrimArray xs 0 (sizeofMutablePrimArray xs) x
+    sz <- getSizeofMutablePrimArray xs
+    setPrimArray xs 0 sz x
     return xs
 
 {-# INLINE replicate #-}
 
 clone :: (PrimMonad m, Prim a) 
       => MutablePrimArray (PrimState m) a -> m (MutablePrimArray (PrimState m) a)
-clone xs = cloneMutablePrimArray xs 0 (sizeofMutablePrimArray xs)
+clone xs = do
+    sz <- getSizeofMutablePrimArray xs
+    cloneMutablePrimArray xs 0 sz
 
 {-# INLINE clone #-}
 
@@ -41,14 +44,17 @@ growWith :: (PrimMonad m, Prim a)
      => a -> MutablePrimArray (PrimState m) a -> Int -> m (MutablePrimArray (PrimState m) a)
 growWith a xs delta = do 
     r <- growNoZ xs delta
-    setPrimArray r (sizeofMutablePrimArray xs) delta a
+    sz <- getSizeofMutablePrimArray xs
+    setPrimArray r sz delta a
     return r
 
 {-# INLINE growWith #-}
 
 growNoZ :: (PrimMonad m, Prim a) 
      => MutablePrimArray (PrimState m) a -> Int -> m (MutablePrimArray (PrimState m) a)
-growNoZ xs delta = resizeMutablePrimArray xs (sizeofMutablePrimArray xs + delta)
+growNoZ xs delta = do
+    sz <- getSizeofMutablePrimArray xs
+    resizeMutablePrimArray xs (sz + delta)
 
 {-# INLINE growNoZ #-}
 
@@ -60,7 +66,7 @@ freeze xs = do
 
 {-# INLINE freeze #-}
 
-length :: Prim a => MutablePrimArray s a -> Int
-length = sizeofMutablePrimArray
+length :: (PrimMonad m, Prim a) => MutablePrimArray (PrimState m) a -> m Int
+length = getSizeofMutablePrimArray
 
 {-# INLINE length #-}

@@ -322,7 +322,8 @@ insert DRef{..} key' value' = do
                 else do
                     count <- refs ! getCount
                     refs <~ getCount $ count + 1
-                    if count == A.length next
+                    nextLen <- A.length next
+                    if count == nextLen
                         then do
                             nd <- resize d count hashCode' key' value'
                             writeMutVar getDRef nd
@@ -371,7 +372,8 @@ addOrResize !targetBucket !hashCode' !key' !value' dref d@Dictionary{..}  = do
         else do
             count <- refs ! getCount
             refs <~ getCount $ count + 1
-            if count == A.length next
+            nextLen <- A.length next
+            if count == nextLen
                 then do
                     nd <- resize d count hashCode' key' value'
                     writeMutVar dref nd
