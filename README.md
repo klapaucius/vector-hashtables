@@ -24,88 +24,88 @@ bench-show report results.csv
 ```
 Benchmark                                                          default(ns)
 ----------------------------------------------------------------- ------------
-Comparison/1000/insert/hashtables basic                               47112.15
-Comparison/1000/insert/vector-hashtables boxed                        22941.55
-Comparison/1000/insert/vector-hashtables unboxed keys                 22338.54
-Comparison/1000/insert/vector-hashtables                              19460.33
-Comparison/1000/insert/mutable vector boxed                            3216.07
-Comparison/1000/insert/mutable vector                                   659.46
-Comparison/1000/insert (resize)/hashtables basic                     158026.86
-Comparison/1000/insert (resize)/vector-hashtables boxed               42164.21
-Comparison/1000/insert (resize)/vector-hashtables unboxed keys        40334.65
-Comparison/1000/insert (resize)/vector-hashtables                     37761.08
-Comparison/1000/insert, delete/hashtables basic                       85218.96
-Comparison/1000/insert, delete/vector-hashtables                      36199.84
-Comparison/1000/find/hashtables basic                                 33857.19
-Comparison/1000/find/vector-hashtables                                14205.24
-Comparison/1000/find/vector-hashtables (frozen)                       12257.88
-Comparison/1000/lookupIndex/hashtables basic                          31842.70
-Comparison/1000/lookupIndex/vector-hashtables                         14140.17
-Comparison/1000/fromList/hashtables basic                            161048.28
-Comparison/1000/fromList/vector-hashtables                            48052.28
-Comparison/1000/toList/hashtables basic                                9569.82
-Comparison/1000/toList/vector-hashtables                              12600.58
-Comparison/10000/insert/hashtables basic                             983062.29
-Comparison/10000/insert/vector-hashtables boxed                      225218.39
-Comparison/10000/insert/vector-hashtables unboxed keys               212758.35
-Comparison/10000/insert/vector-hashtables                            186573.02
-Comparison/10000/insert/mutable vector boxed                          37415.65
-Comparison/10000/insert/mutable vector                                 6956.86
-Comparison/10000/insert (resize)/hashtables basic                   1696364.18
-Comparison/10000/insert (resize)/vector-hashtables boxed             479122.17
-Comparison/10000/insert (resize)/vector-hashtables unboxed keys      422759.56
-Comparison/10000/insert (resize)/vector-hashtables                   352441.24
-Comparison/10000/insert, delete/hashtables basic                    1426337.13
-Comparison/10000/insert, delete/vector-hashtables                    359228.91
-Comparison/10000/find/hashtables basic                               330890.67
-Comparison/10000/find/vector-hashtables                              141525.60
-Comparison/10000/find/vector-hashtables (frozen)                     122542.86
-Comparison/10000/lookupIndex/hashtables basic                        327065.33
-Comparison/10000/lookupIndex/vector-hashtables                       142678.55
-Comparison/10000/fromList/hashtables basic                          1641384.65
-Comparison/10000/fromList/vector-hashtables                          542530.31
-Comparison/10000/toList/hashtables basic                             143188.55
-Comparison/10000/toList/vector-hashtables                            274318.45
-Comparison/100000/insert/hashtables basic                          10907947.88
-Comparison/100000/insert/vector-hashtables boxed                    6932748.81
-Comparison/100000/insert/vector-hashtables unboxed keys             5307166.72
-Comparison/100000/insert/vector-hashtables                          2368482.76
-Comparison/100000/insert/mutable vector boxed                       1794351.95
-Comparison/100000/insert/mutable vector                               69989.51
-Comparison/100000/insert (resize)/hashtables basic                 22232168.04
-Comparison/100000/insert (resize)/vector-hashtables boxed          11420001.24
-Comparison/100000/insert (resize)/vector-hashtables unboxed keys    9496935.97
-Comparison/100000/insert (resize)/vector-hashtables                 5988321.89
-Comparison/100000/insert, delete/hashtables basic                  15119684.92
-Comparison/100000/insert, delete/vector-hashtables                  4058662.48
-Comparison/100000/find/hashtables basic                             3473800.70
-Comparison/100000/find/vector-hashtables                            1431873.00
-Comparison/100000/find/vector-hashtables (frozen)                   1225155.68
-Comparison/100000/lookupIndex/hashtables basic                      3235041.49
-Comparison/100000/lookupIndex/vector-hashtables                     1439338.81
-Comparison/100000/fromList/hashtables basic                        22917643.59
-Comparison/100000/fromList/vector-hashtables                        8603353.43
-Comparison/100000/toList/hashtables basic                           5336633.37
-Comparison/100000/toList/vector-hashtables                          9377042.71
-Comparison/1000000/insert/hashtables basic                        109193301.77
-Comparison/1000000/insert/vector-hashtables boxed                  77176586.83
-Comparison/1000000/insert/vector-hashtables unboxed keys           59037764.29
-Comparison/1000000/insert/vector-hashtables                        28535981.51
-Comparison/1000000/insert/mutable vector boxed                     29709444.79
-Comparison/1000000/insert/mutable vector                             866220.55
-Comparison/1000000/insert (resize)/hashtables basic               260585504.79
-Comparison/1000000/insert (resize)/vector-hashtables boxed        127608418.79
-Comparison/1000000/insert (resize)/vector-hashtables unboxed keys  96059752.01
-Comparison/1000000/insert (resize)/vector-hashtables               57038345.24
-Comparison/1000000/insert, delete/hashtables basic                153182769.34
-Comparison/1000000/insert, delete/vector-hashtables                47664402.90
-Comparison/1000000/find/hashtables basic                           35821229.20
-Comparison/1000000/find/vector-hashtables                          15711648.56
-Comparison/1000000/find/vector-hashtables (frozen)                 12885372.25
-Comparison/1000000/lookupIndex/hashtables basic                    32210529.62
-Comparison/1000000/lookupIndex/vector-hashtables                   14911308.87
-Comparison/1000000/fromList/hashtables basic                      446988819.28
-Comparison/1000000/fromList/vector-hashtables                      92793579.75
-Comparison/1000000/toList/hashtables basic                         66679253.65
-Comparison/1000000/toList/vector-hashtables                       105470198.31
+Comparison/1000/insert/hashtables basic                               36907.68
+Comparison/1000/insert/vector-hashtables boxed                        17055.86
+Comparison/1000/insert/vector-hashtables unboxed keys                 15333.05
+Comparison/1000/insert/vector-hashtables                              13881.72
+Comparison/1000/insert/mutable vector boxed                            3658.16
+Comparison/1000/insert/mutable vector                                  1282.13
+Comparison/1000/insert (resize)/hashtables basic                     159834.87
+Comparison/1000/insert (resize)/vector-hashtables boxed               25900.28
+Comparison/1000/insert (resize)/vector-hashtables unboxed keys        25382.56
+Comparison/1000/insert (resize)/vector-hashtables                     21393.31
+Comparison/1000/insert, delete/hashtables basic                       72615.51
+Comparison/1000/insert, delete/vector-hashtables                      20920.26
+Comparison/1000/find/hashtables basic                                 23678.93
+Comparison/1000/find/vector-hashtables                                 5586.93
+Comparison/1000/find/vector-hashtables (frozen)                        3128.18
+Comparison/1000/lookupIndex/hashtables basic                          19209.79
+Comparison/1000/lookupIndex/vector-hashtables                          4978.75
+Comparison/1000/fromList/hashtables basic                            162920.75
+Comparison/1000/fromList/vector-hashtables                            25283.17
+Comparison/1000/toList/hashtables basic                                9286.65
+Comparison/1000/toList/vector-hashtables                              10022.51
+Comparison/10000/insert/hashtables basic                             373885.01
+Comparison/10000/insert/vector-hashtables boxed                      175892.73
+Comparison/10000/insert/vector-hashtables unboxed keys               147689.46
+Comparison/10000/insert/vector-hashtables                            128417.71
+Comparison/10000/insert/mutable vector boxed                          42712.36
+Comparison/10000/insert/mutable vector                                12193.85
+Comparison/10000/insert (resize)/hashtables basic                   1378595.70
+Comparison/10000/insert (resize)/vector-hashtables boxed             273187.43
+Comparison/10000/insert (resize)/vector-hashtables unboxed keys      242659.06
+Comparison/10000/insert (resize)/vector-hashtables                   188011.22
+Comparison/10000/insert, delete/hashtables basic                     736250.66
+Comparison/10000/insert, delete/vector-hashtables                    200643.92
+Comparison/10000/find/hashtables basic                               232874.24
+Comparison/10000/find/vector-hashtables                               55693.39
+Comparison/10000/find/vector-hashtables (frozen)                      31291.02
+Comparison/10000/lookupIndex/hashtables basic                        191707.57
+Comparison/10000/lookupIndex/vector-hashtables                        49762.50
+Comparison/10000/fromList/hashtables basic                          1562065.86
+Comparison/10000/fromList/vector-hashtables                          233128.12
+Comparison/10000/toList/hashtables basic                             114543.83
+Comparison/10000/toList/vector-hashtables                            154034.89
+Comparison/100000/insert/hashtables basic                           4546924.57
+Comparison/100000/insert/vector-hashtables boxed                    1767261.44
+Comparison/100000/insert/vector-hashtables unboxed keys             1476174.02
+Comparison/100000/insert/vector-hashtables                          1272101.52
+Comparison/100000/insert/mutable vector boxed                        666673.13
+Comparison/100000/insert/mutable vector                              123138.53
+Comparison/100000/insert (resize)/hashtables basic                 18777839.68
+Comparison/100000/insert (resize)/vector-hashtables boxed           7287443.14
+Comparison/100000/insert (resize)/vector-hashtables unboxed keys    5698107.38
+Comparison/100000/insert (resize)/vector-hashtables                 2574932.04
+Comparison/100000/insert, delete/hashtables basic                   8790937.73
+Comparison/100000/insert, delete/vector-hashtables                  2010559.30
+Comparison/100000/find/hashtables basic                             2346364.66
+Comparison/100000/find/vector-hashtables                             588427.30
+Comparison/100000/find/vector-hashtables (frozen)                    319639.97
+Comparison/100000/lookupIndex/hashtables basic                      1931036.13
+Comparison/100000/lookupIndex/vector-hashtables                      499992.98
+Comparison/100000/fromList/hashtables basic                        30059346.94
+Comparison/100000/fromList/vector-hashtables                        3945839.47
+Comparison/100000/toList/hashtables basic                           2702739.12
+Comparison/100000/toList/vector-hashtables                          5118781.70
+Comparison/1000000/insert/hashtables basic                         85752701.43
+Comparison/1000000/insert/vector-hashtables boxed                  75667649.90
+Comparison/1000000/insert/vector-hashtables unboxed keys           46615543.58
+Comparison/1000000/insert/vector-hashtables                        16025927.63
+Comparison/1000000/insert/mutable vector boxed                     32068295.04
+Comparison/1000000/insert/mutable vector                            1393859.51
+Comparison/1000000/insert (resize)/hashtables basic               282346897.14
+Comparison/1000000/insert (resize)/vector-hashtables boxed         84385042.40
+Comparison/1000000/insert (resize)/vector-hashtables unboxed keys  62413398.66
+Comparison/1000000/insert (resize)/vector-hashtables               28777902.04
+Comparison/1000000/insert, delete/hashtables basic                134399640.44
+Comparison/1000000/insert, delete/vector-hashtables                23648387.28
+Comparison/1000000/find/hashtables basic                           24583079.42
+Comparison/1000000/find/vector-hashtables                           6178348.57
+Comparison/1000000/find/vector-hashtables (frozen)                  3425505.60
+Comparison/1000000/lookupIndex/hashtables basic                    19753759.16
+Comparison/1000000/lookupIndex/vector-hashtables                    5357116.98
+Comparison/1000000/fromList/hashtables basic                      222974094.62
+Comparison/1000000/fromList/vector-hashtables                      49212505.34
+Comparison/1000000/toList/hashtables basic                         66351583.99
+Comparison/1000000/toList/vector-hashtables                        98441804.39
 ```
