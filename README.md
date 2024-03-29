@@ -12,7 +12,7 @@ A brief history of this library is given in [this blog post](https://an-pro.org/
 
 (and `vector` where relevant)
 
-Benchmarks below are produced under GHC 9.2.5, and can be reproduced locally with
+Benchmarks below are produced under GHC 9.4.8, and can be reproduced locally with
 
 ```shellsession
 cabal bench --benchmark-options="--csv results.csv"
