@@ -11,7 +11,7 @@ license:             BSD3
 license-file:        LICENSE
 author:              klapaucius
 maintainer:          klapaucius, swamp_agr, ArtemPelenitsyn
-copyright:           2016-2023 klapaucius, swamp_agr
+copyright:           2016-2024 klapaucius, swamp_agr
 category:            Data
 build-type:          Simple
 extra-doc-files:     README.md,
@@ -71,7 +71,7 @@ test-suite vector-hashtables-test
   -- Additional dependencies
   build-depends:
       hspec                >= 2.6.0    && < 2.12
-    , QuickCheck           >= 2.12.6.1 && < 2.15
+    , QuickCheck           >= 2.12.6.1 && < 2.16
     , quickcheck-instances >= 0.3.19   && < 0.4
 
   build-tool-depends:
