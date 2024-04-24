@@ -15,8 +15,6 @@ module Data.Vector.Hashtables
       Dictionary (..)
     , FrozenDictionary (..)
     , findElem
-    , Dictionary_ (..)
-    , findEntry
 
     -- ** Construction
     , initialize
@@ -34,6 +32,7 @@ module Data.Vector.Hashtables
     , upsert
     , alter
     , alterM
+    , findEntry
 
     -- ** Combine
 
@@ -60,6 +59,10 @@ module Data.Vector.Hashtables
     -- *** List
     , fromList
     , toList
+
+    -- ** Low-level interface
+    , Dictionary_ (..)
+    , findEntry_
 
     , module Control.Monad.Primitive
     ) where
