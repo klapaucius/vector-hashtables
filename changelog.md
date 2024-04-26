@@ -1,3 +1,14 @@
+# 0.1.2.0 (2024-04-26)
+
+* Add `upsert` function to public interface (see [#21](https://github.com/klapaucius/vector-hashtables/pull/21)).
+* Simplify support of 32-bit architectures via `maxBound` (see [#22](https://github.com/klapaucius/vector-hashtables/pull/22)).
+* Improve performance via strictness annotations and bang patterns (see [#24](https://github.com/klapaucius/vector-hashtables/pull/24)).
+* Suggest using strict boxed vectors to avoid accumulation of thunks (see [#27](https://github.com/klapaucius/vector-hashtables/pull/27)).
+* Speed up division by bucket's size (see [#28](https://github.com/klapaucius/vector-hashtables/pull/28)).
+* Avoid deprecated `sizeofMutablePrimArray` (see [#29](https://github.com/klapaucius/vector-hashtables/pull/29)).
+* Introduce `findEntry_` and avoid examining `MutVar` twice in `at` (see [#32](https://github.com/klapaucius/vector-hashtables/pull/32)).
+* Bump `QuickCheck` boundary (see [#33](https://github.com/klapaucius/vector-hashtables/pull/33)).
+
 # 0.1.1.4 (2023-12-13)
 
 * Add `wasm32` support (see [#20](https://github.com/klapaucius/vector-hashtables/pull/20)).
