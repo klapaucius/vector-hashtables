@@ -18,14 +18,16 @@ extra-doc-files:     README.md,
                      changelog.md
 extra-source-files:  gen/GenPrimes.hs
 tested-with:
-    GHC == 9.8.1
-    GHC == 9.6.3
-    GHC == 9.4.7
-    GHC == 9.2.8
-    GHC == 9.0.2
-    GHC == 8.10.7
-    GHC == 8.8.4
-    GHC == 8.6.5
+  GHC == 9.12.2
+  GHC == 9.10.2
+  GHC == 9.8.4
+  GHC == 9.6.7
+  GHC == 9.4.8
+  GHC == 9.2.8
+  GHC == 9.0.2
+  GHC == 8.10.7
+  GHC == 8.8.4
+  GHC == 8.6.5
 
 library
   hs-source-dirs:    src
