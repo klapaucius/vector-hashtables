@@ -1,4 +1,4 @@
-cabal-version:       2.0
+cabal-version:       3.0
 name:                vector-hashtables
 version:             0.1.2.1
 synopsis:            Efficient vector-based mutable hashtables implementation.
@@ -7,7 +7,7 @@ description:
   .
   See "Data.Vector.Hashtables" for documentation.
 homepage:            https://github.com/klapaucius/vector-hashtables#readme
-license:             BSD3
+license:             BSD-3-Clause
 license-file:        LICENSE
 author:              klapaucius
 maintainer:          klapaucius, swamp_agr, ArtemPelenitsyn
@@ -18,14 +18,17 @@ extra-doc-files:     README.md,
                      changelog.md
 extra-source-files:  gen/GenPrimes.hs
 tested-with:
-    GHC == 9.8.1
-    GHC == 9.6.3
-    GHC == 9.4.7
-    GHC == 9.2.8
-    GHC == 9.0.2
-    GHC == 8.10.7
-    GHC == 8.8.4
-    GHC == 8.6.5
+    GHC == { 
+      9.12.2,
+      9.10.2,
+      9.8.4,
+      9.6.7,
+      9.4.8,
+      9.2.8,
+      9.0.2,
+      8.10.7,
+      8.8.4,
+      8.6.5 }
 
 library
   hs-source-dirs:    src
