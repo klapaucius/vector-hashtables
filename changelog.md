@@ -1,3 +1,7 @@
+# 0.1.2.1 (2025-06-17)
+
+* Bump `QuickCheck` version (see [#34](https://github.com/klapaucius/vector-hashtables/pull/34)).
+
 # 0.1.2.0 (2024-04-26)
 
 * Add `upsert` function to public interface (see [#21](https://github.com/klapaucius/vector-hashtables/pull/21)).
