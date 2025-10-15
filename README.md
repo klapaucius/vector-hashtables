@@ -20,6 +20,8 @@ bench-show report results.csv
 ```
 (You will need the `bench-show` tool, which is available from Hackage.)
 
+You can also see the plots produced from the same numbers in [./charts/readme.md](./charts/readme.md).
+
 
 | Benchmark | v.0.1.1.4 (ns) | current (ns) |
 | ----------------------------------------------------------------- | ------------ | ------------ | 
