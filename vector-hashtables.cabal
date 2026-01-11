@@ -74,7 +74,7 @@ test-suite vector-hashtables-test
   build-depends:
       hspec                >= 2.6.0    && < 2.12
     , QuickCheck           >= 2.12.6.1 && < 2.17
-    , quickcheck-instances >= 0.3.19   && < 0.4
+    , quickcheck-instances >= 0.3.19   && < 0.5
 
   build-tool-depends:
     hspec-discover:hspec-discover >= 2.6.0 && < 2.12
