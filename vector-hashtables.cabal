@@ -18,8 +18,9 @@ extra-doc-files:     README.md,
                      changelog.md
 extra-source-files:  gen/GenPrimes.hs
 tested-with:
+  GHC == 9.14.1
   GHC == 9.12.2
-  GHC == 9.10.2
+  GHC == 9.10.3
   GHC == 9.8.4
   GHC == 9.6.7
   GHC == 9.4.8
@@ -53,7 +54,6 @@ benchmark vector-hashtables-bench
                      , primitive
                      , criterion
                      , hashtables
-                     , unordered-containers
   default-language:    Haskell2010
 
 test-suite vector-hashtables-test
@@ -74,7 +74,6 @@ test-suite vector-hashtables-test
   build-depends:
       hspec                >= 2.6.0    && < 2.12
     , QuickCheck           >= 2.12.6.1 && < 2.18
-    , quickcheck-instances >= 0.3.19   && < 0.5
 
   build-tool-depends:
     hspec-discover:hspec-discover >= 2.6.0 && < 2.12
