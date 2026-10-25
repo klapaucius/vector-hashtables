@@ -32,7 +32,7 @@ import           Test.QuickCheck                 (Arbitrary (..), Gen,
                                                   Positive (..), Property,
                                                   choose, elements, forAll,
                                                   generate, property, shuffle,
-                                                  vector)
+                                                  vector, (==>))
 
 import           Test.Hspec                      (Spec, describe, errorCall, it,
                                                   shouldBe, shouldThrow)
@@ -103,6 +103,17 @@ class HashTableTest ks vs where
 
   testAtCollide
     :: (VH.Dictionary (PrimState IO) ks AlwaysCollide vs Int) -> AlwaysCollide -> IO Int
+
+  testAlterCollide
+    :: (VH.Dictionary (PrimState IO) ks AlwaysCollide vs Int)
+    -> (Maybe Int -> Maybe Int) -> AlwaysCollide -> IO ()
+
+  testAlterMCollide
+    :: (VH.Dictionary (PrimState IO) ks AlwaysCollide vs Int)
+    -> (Maybe Int -> IO (Maybe Int)) -> AlwaysCollide -> IO ()
+
+  testLookupCollide
+    :: (VH.Dictionary (PrimState IO) ks AlwaysCollide vs Int) -> AlwaysCollide -> IO (Maybe Int)
 
   testFromList
     :: Proxy ks -> Proxy vs -> [(Int, Int)] -> IO (VH.Dictionary (PrimState IO) ks Int vs Int)
@@ -179,6 +190,12 @@ mkSpec ksp vsp = describe (specDescription ksp vsp) $
       it "when altering is nothing - key deleted from table" $ property prop_alterDelete
 
       it "when altering is just a result - key updated with result" $ property prop_alterUpdate
+
+      it "deleting via alter keeps the other keys of the same bucket" $
+        property (prop_alterDeleteCollisions False)
+
+      it "deleting via alterM keeps the other keys of the same bucket" $
+        property (prop_alterDeleteCollisions True)
 
       it "when upserting a new key - key is set to value" $ property prop_upsertInsert
 
@@ -301,6 +318,22 @@ mkSpec ksp vsp = describe (specDescription ksp vsp) $
       v <- testMember ht x
       v `shouldBe` False
 
+    -- All keys share one bucket chain; deleting one must not unlink the
+    -- entries before it in the chain (#43).
+    prop_alterDeleteCollisions :: Bool -> [Int] -> NonNegative Int -> Property
+    prop_alterDeleteCollisions useM ks (NonNegative i) =
+      not (null keys) ==> do
+        ht <- testInitCollide (Proxy @ks) (Proxy @vs) 10
+        mapM_ (\k -> testInsertCollide ht (AC k) k) keys
+        let gone = keys !! (i `mod` length keys)
+        if useM
+          then testAlterMCollide ht (const (pure Nothing)) (AC gone)
+          else testAlterCollide ht (const Nothing) (AC gone)
+        found <- mapM (testLookupCollide ht . AC) keys
+        found `shouldBe` [if k == gone then Nothing else Just k | k <- keys]
+      where
+        keys = Set.toList (Set.fromList ks)
+
     prop_alterUpdate :: HashTableTest ks vs => (Int, Int) -> IO ()
     prop_alterUpdate (x, y) = do
       ht <- testInit (Proxy @ks) (Proxy @vs) 10
@@ -353,6 +386,9 @@ instance HashTableTest M.MVector M.MVector where
   testDelete = VH.delete
   testInsertCollide = VH.insert
   testAtCollide = VH.at
+  testAlterCollide = VH.alter
+  testAlterMCollide = VH.alterM
+  testLookupCollide = VH.lookup
   testLength = VH.length
   testFromList _ _ = VH.fromList
   testToList = VH.toList
@@ -378,6 +414,9 @@ instance HashTableTest SM.MVector SM.MVector where
   testDelete = VH.delete
   testInsertCollide = VH.insert
   testAtCollide = VH.at
+  testAlterCollide = VH.alter
+  testAlterMCollide = VH.alterM
+  testLookupCollide = VH.lookup
   testLength = VH.length
   testFromList _ _ = VH.fromList
   testToList = VH.toList
@@ -403,6 +442,9 @@ instance HashTableTest SM.MVector M.MVector where
   testDelete = VH.delete
   testInsertCollide = VH.insert
   testAtCollide = VH.at
+  testAlterCollide = VH.alter
+  testAlterMCollide = VH.alterM
+  testLookupCollide = VH.lookup
   testLength = VH.length
   testFromList _ _ = VH.fromList
   testToList = VH.toList
@@ -428,6 +470,9 @@ instance HashTableTest M.MVector UM.MVector where
   testDelete = VH.delete
   testInsertCollide = VH.insert
   testAtCollide = VH.at
+  testAlterCollide = VH.alter
+  testAlterMCollide = VH.alterM
+  testLookupCollide = VH.lookup
   testLength = VH.length
   testFromList _ _ = VH.fromList
   testToList = VH.toList

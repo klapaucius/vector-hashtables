@@ -1,3 +1,7 @@
+# Unreleased
+
+* Fix `alter` and `alterM` losing other keys of the same bucket when deleting (see [#43](https://github.com/klapaucius/vector-hashtables/issues/43)).
+
 # 0.1.2.1 (2025-06-17)
 
 * Bump `QuickCheck` version (see [#34](https://github.com/klapaucius/vector-hashtables/pull/34)).

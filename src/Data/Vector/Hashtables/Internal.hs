@@ -687,7 +687,7 @@ alter ht f k = do
       !targetBucket = hashCode' `fastRem` remSize
 
       onFound' value' dict i = insertWithIndex targetBucket hashCode' k value' (getDRef ht) dict i
-      onNothing' dict i = deleteWithIndex targetBucket hashCode' d k (-1) i
+      onNothing' _ _ = deleteWithIndex targetBucket hashCode' d k (-1) =<< buckets ! targetBucket
 
       onFound dict i = do
         d'@Dictionary{..} <- readMutVar . getDRef $ dict
@@ -721,7 +721,7 @@ alterM ht f k = do
       !targetBucket = hashCode' `fastRem` remSize
 
       onFound' value' dict i = insertWithIndex targetBucket hashCode' k value' (getDRef ht) dict i
-      onNothing' dict i = deleteWithIndex targetBucket hashCode' d k (-1) i
+      onNothing' _ _ = deleteWithIndex targetBucket hashCode' d k (-1) =<< buckets ! targetBucket
 
       onFound dict i = do
         d'@Dictionary{..} <- readMutVar . getDRef $ dict
