@@ -13,6 +13,11 @@ import           Criterion.Main                  (bench, bgroup, defaultMain, nf
 import           Criterion                       (Benchmark)
 
 import qualified Data.Vector.Hashtables.Internal as VH
+import qualified Data.Vector                     as BVec
+import           Control.DeepSeq                 (NFData (..))
+import           Criterion.Main                  (perRunEnv)
+import           Data.Bits                       (shiftR, xor)
+import           Data.Hashable                   (Hashable (..))
 
 vh :: Int -> IO (VH.Dictionary (PrimState IO) VM.MVector Int VM.MVector Int)
 vh n = do
@@ -224,7 +229,8 @@ main = do
     utilitiesBench  <- mapM utilities inputs
     defaultMain
         [ bgroup "Comparison" comparisonBench
-        , bgroup "Utilities"  utilitiesBench ]
+        , bgroup "Utilities"  utilitiesBench
+        , bgroup "AlterDelete" alterDeleteBench ]
 
 -- ** Utilities benchmark
 
@@ -348,3 +354,74 @@ bhufromList htlist = do
   return ()
 
 bhutoList ht = VH.toList ht >> return ()
+
+-- ** Deleting through alter/alterM, against delete
+--
+-- Only the deletes are timed: every run gets a freshly filled table
+-- (perRunEnv), and deletes every key in insertion order.
+
+-- | Every key in one bucket chain.
+newtype Collide = Collide Int deriving (Eq, Show)
+
+instance Hashable Collide where
+  hashWithSalt _ _ = 0
+  hash _ = 0
+
+-- | Lets perRunEnv hold a mutable table.
+newtype Env a = Env a
+
+instance NFData (Env a) where
+  rnf (Env a) = a `seq` ()
+
+type IntTable = VH.Dictionary (PrimState IO) VM.MVector Int VM.MVector Int
+type CollideTable = VH.Dictionary (PrimState IO) BV.MVector Collide VM.MVector Int
+
+-- | Distinct pseudo-random keys (SplitMix's finaliser is a bijection), so
+-- buckets collide the way real keys do; sequential Int keys never collide.
+randomKeys :: Int -> [Int]
+randomKeys n = map mix [1 .. n + 1]
+  where
+    mix z0 = let z1 = (z0 `xor` (z0 `shiftR` 30)) * 0xbf58476d1ce4e5b9
+                 z2 = (z1 `xor` (z1 `shiftR` 27)) * 0x94d049bb133111eb
+             in z2 `xor` (z2 `shiftR` 31)
+
+fillInt :: BVec.Vector Int -> IO (Env IntTable)
+fillInt ks = do
+    ht <- VH.initialize (BVec.length ks)
+    BVec.mapM_ (\k -> VH.insert ht k k) ks
+    return (Env ht)
+
+fillCollide :: BVec.Vector Collide -> IO (Env CollideTable)
+fillCollide ks = do
+    ht <- VH.initialize (BVec.length ks)
+    BVec.mapM_ (\k@(Collide i) -> VH.insert ht k i) ks
+    return (Env ht)
+
+deleteGroup
+  :: (BVec.Vector k -> IO (Env (VH.Dictionary (PrimState IO) ks k vs Int)))
+  -> (VH.Dictionary (PrimState IO) ks k vs Int -> k -> IO ())
+  -> (VH.Dictionary (PrimState IO) ks k vs Int -> k -> IO ())
+  -> (VH.Dictionary (PrimState IO) ks k vs Int -> k -> IO ())
+  -> String -> BVec.Vector k -> Benchmark
+deleteGroup fill del alt altM name ks = bgroup name
+    [ bench "delete" $ perRunEnv (fill ks) (\(Env ht) -> BVec.mapM_ (del ht) ks)
+    , bench "alter"  $ perRunEnv (fill ks) (\(Env ht) -> BVec.mapM_ (alt ht) ks)
+    , bench "alterM" $ perRunEnv (fill ks) (\(Env ht) -> BVec.mapM_ (altM ht) ks) ]
+{-# INLINE deleteGroup #-}
+
+intDeletes :: String -> BVec.Vector Int -> Benchmark
+intDeletes = deleteGroup fillInt VH.delete
+    (\ht -> VH.alter ht (const Nothing)) (\ht -> VH.alterM ht (const (return Nothing)))
+
+collideDeletes :: String -> BVec.Vector Collide -> Benchmark
+collideDeletes = deleteGroup fillCollide VH.delete
+    (\ht -> VH.alter ht (const Nothing)) (\ht -> VH.alterM ht (const (return Nothing)))
+
+alterDeleteBench :: [Benchmark]
+alterDeleteBench =
+    [ bgroup (show n)
+        [ intDeletes "sequential" (BVec.fromList [0 .. n])
+        , intDeletes "random" (BVec.fromList (randomKeys n)) ]
+    | n <- [10000, 1000000] ] ++
+    [ bgroup (show n) [ collideDeletes "one chain" (BVec.fromList (map Collide [0 .. n])) ]
+    | n <- [1000] ]
