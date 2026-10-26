@@ -261,6 +261,31 @@ atWithOrElse d k onFound onNothing = do
       else onNothing d
 {-# INLINE atWithOrElse #-}
 
+-- | Like 'atWithOrElse', but @onFound@ also gets the found entry's
+-- predecessor in its bucket chain (@-1@ if the entry is the head).
+atWithPrevOrElse :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
+     => Dictionary (PrimState m) ks k vs v
+     -> k
+     -> (Dictionary (PrimState m) ks k vs v -> Int -> Int -> m a)
+     -> (Dictionary (PrimState m) ks k vs v -> m a)
+     -> m a
+atWithPrevOrElse d key' onFound onNothing = do
+  Dictionary{..} <- readMutVar . getDRef $ d
+  let hashCode' = hash key' .&. mask
+      go !prev !i
+        | i >= 0 = do
+            hc <- hashCode ! i
+            if hc == hashCode'
+              then do
+                k <- key !~ i
+                if k == key'
+                  then onFound d prev i
+                  else go i =<< next ! i
+              else go i =<< next ! i
+        | otherwise = onNothing d
+  go (-1) =<< buckets ! (hashCode' `fastRem` remSize)
+{-# INLINE atWithPrevOrElse #-}
+
 -- | /O(1)/ in the best case, /O(n)/ in the worst case.
 -- Find dictionary entry by given key. If entry not found @-1@ returned.
 findEntry :: (MVector ks k, MVector vs v, PrimMonad m, Hashable k, Eq k)
@@ -687,13 +712,13 @@ alter ht f k = do
       !targetBucket = hashCode' `fastRem` remSize
 
       onFound' value' dict i = insertWithIndex targetBucket hashCode' k value' (getDRef ht) dict i
-      onNothing' dict i = deleteWithIndex targetBucket hashCode' d k (-1) i
+      onNothing' prev i = deleteWithIndex targetBucket hashCode' d k prev i
 
-      onFound dict i = do
+      onFound dict prev i = do
         d'@Dictionary{..} <- readMutVar . getDRef $ dict
         v <- value !~ i
         case f (Just v) of
-          Nothing -> onNothing' d' i
+          Nothing -> onNothing' prev i
           Just v' ->  onFound' v' d' i
 
       onNothing dict = do
@@ -702,7 +727,7 @@ alter ht f k = do
           Nothing -> return ()
           Just v' -> onFound' v' d' (-1)
 
-  void $ atWithOrElse ht k onFound onNothing
+  void $ atWithPrevOrElse ht k onFound onNothing
 
 {-# INLINE alter #-}
 
@@ -721,14 +746,14 @@ alterM ht f k = do
       !targetBucket = hashCode' `fastRem` remSize
 
       onFound' value' dict i = insertWithIndex targetBucket hashCode' k value' (getDRef ht) dict i
-      onNothing' dict i = deleteWithIndex targetBucket hashCode' d k (-1) i
+      onNothing' prev i = deleteWithIndex targetBucket hashCode' d k prev i
 
-      onFound dict i = do
+      onFound dict prev i = do
         d'@Dictionary{..} <- readMutVar . getDRef $ dict
         v <- value !~ i
         res <- f (Just v)
         case res of
-          Nothing -> onNothing' d' i
+          Nothing -> onNothing' prev i
           Just v' ->  onFound' v' d' i
 
       onNothing dict = do
@@ -738,7 +763,7 @@ alterM ht f k = do
           Nothing -> return ()
           Just v' -> onFound' v' d' (-1)
 
-  void $ atWithOrElse ht k onFound onNothing
+  void $ atWithPrevOrElse ht k onFound onNothing
 
 {-# INLINE alterM #-}
 
